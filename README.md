@@ -36,44 +36,6 @@ QQ 官方 C2C 消息接口
 
 1. 在 [QQ 开放平台](https://q.qq.com/) 创建机器人。
 2. 获取 `AppID` 和 `AppSecret`。
-3. 将测试账号加入机器人可用范围。
-
-## 环境变量
-
-复制 `.env.example` 为 `.env`，按下表填写：
-
-| 变量 | 必填 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `QQ_APP_ID` | 是 | - | QQ 机器人 AppID |
-| `QQ_CLIENT_SECRET` | 是 | - | QQ 机器人 AppSecret |
-| `QQ_API_BASE` | 否 | `https://api.bot.qq.com` | QQ OpenAPI 地址 |
-| `QQ_GATEWAY_URL` | 否 | 自动获取 | 自定义 Gateway 地址 |
-| `QQ_INTENTS` | 否 | `33554432` | Gateway Identify 位掩码，通常不需要修改 |
-| `LLM_API_KEY` | 是 | - | LLM 服务商 API Key |
-| `LLM_BASE_URL` | 否 | `https://api.deepseek.com` | OpenAI 兼容 API 根地址 |
-| `LLM_MODEL` | 否 | `deepseek-chat` | 模型名称 |
-| `SYSTEM_PROMPT` | 否 | 中文助手提示词 | Agent 的系统提示词 |
-| `HISTORY_LIMIT` | 否 | `12` | 每个用户保留的消息条数 |
-| `HTTP_PORT` | 否 | `3000` | 本机健康检查端口 |
-
-默认配置使用 DeepSeek 作为示例。切换到其他 OpenAI 兼容服务时，只需要修改 `LLM_API_KEY`、`LLM_BASE_URL` 和 `LLM_MODEL`。
-
-示例：
-
-```dotenv
-QQ_APP_ID=your-qq-app-id
-QQ_CLIENT_SECRET=your-qq-client-secret
-QQ_INTENTS=33554432
-
-LLM_API_KEY=your-llm-api-key
-LLM_BASE_URL=https://api.deepseek.com
-LLM_MODEL=deepseek-chat
-SYSTEM_PROMPT=你是一个可靠、简洁的 QQ 私聊助手。请用中文回答，无法确定时明确说明。
-HISTORY_LIMIT=12
-HTTP_PORT=3000
-```
-
-不要把 `.env` 或任何 API Key 提交到 Git。
 
 ## Linux 部署
 
@@ -112,15 +74,7 @@ sudo nano /opt/qq-llm-agent/.env
 
 填写 QQ 和 LLM 配置：
 
-```ini
-QQ_APP_ID=你的QQ机器人AppID
-QQ_CLIENT_SECRET=你的AppSecret
-QQ_INTENTS=33554432
-
-LLM_API_KEY=你的LLM_API_Key
-LLM_BASE_URL=https://api.deepseek.com
-LLM_MODEL=deepseek-chat
-```
+具体配置请参考[环境变量表](#环境变量)。
 
 保存后限制权限：
 
@@ -158,6 +112,39 @@ curl http://127.0.0.1:3000/health
 ```
 
 服务器不需要开放公网端口，只要允许访问 QQ 官方 API、Gateway 和 LLM 服务商的 HTTPS/WSS 地址即可。后台不需要单独配置 C2C 私聊权限，程序会使用 `QQ_INTENTS=33554432` 订阅对应事件。
+
+## 环境变量
+
+| 变量 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `QQ_APP_ID` | 是 | - | QQ 机器人 AppID |
+| `QQ_CLIENT_SECRET` | 是 | - | QQ 机器人 AppSecret |
+| `QQ_API_BASE` | 否 | `https://api.bot.qq.com` | QQ OpenAPI 地址 |
+| `QQ_GATEWAY_URL` | 否 | 自动获取 | 自定义 Gateway 地址 |
+| `QQ_INTENTS` | 否 | `33554432` | Gateway Identify 位掩码，通常不需要修改 |
+| `LLM_API_KEY` | 是 | - | LLM 服务商 API Key |
+| `LLM_BASE_URL` | 否 | `https://api.deepseek.com` | OpenAI 兼容 API 根地址 |
+| `LLM_MODEL` | 否 | `deepseek-chat` | 模型名称 |
+| `SYSTEM_PROMPT` | 否 | 中文助手提示词 | Agent 的系统提示词 |
+| `HISTORY_LIMIT` | 否 | `12` | 每个用户保留的消息条数 |
+| `HTTP_PORT` | 否 | `3000` | 本机健康检查端口 |
+
+默认配置使用 DeepSeek 作为示例。切换到其他 OpenAI 兼容服务时，只需要修改 `LLM_API_KEY`、`LLM_BASE_URL` 和 `LLM_MODEL`。
+
+示例：
+
+```dotenv
+QQ_APP_ID=your-qq-app-id
+QQ_CLIENT_SECRET=your-qq-client-secret
+QQ_INTENTS=33554432
+
+LLM_API_KEY=your-llm-api-key
+LLM_BASE_URL=https://api.deepseek.com
+LLM_MODEL=deepseek-chat
+SYSTEM_PROMPT=你是一个可靠、简洁的 QQ 私聊助手。请用中文回答，无法确定时明确说明。
+HISTORY_LIMIT=12
+HTTP_PORT=3000
+```
 
 ### 更新代码
 
