@@ -1,0 +1,18 @@
+[Unit]
+Description=QQ DeepSeek private chat agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=qqbot
+WorkingDirectory=/opt/qq-deepseek-agent
+EnvironmentFile=/opt/qq-deepseek-agent/.env
+ExecStart=/usr/bin/node /opt/qq-deepseek-agent/src/index.mjs
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+{
+  "name": "qq-deepseek-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "QQ Official Bot C2C private chat agent powered by DeepSeek",
+  "type": "module",
+  "engines": {
+    "node": ">=22.4.0"
+  },
+  "scripts": {
+    "start": "node src/index.mjs",
+    "dev": "node --watch src/index.mjs"
+  }
+}
