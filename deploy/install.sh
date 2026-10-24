@@ -26,7 +26,7 @@ require_root() {
 install_system_packages() {
   log "安装 Git、curl 和 CA 证书..."
   apt-get update
-  DEBIAN_FRONTEND=noninteractive apt-get install -y git curl ca-certificates
+  DEBIAN_FRONTEND=noninteractive apt-get install -y git curl ca-certificates nano
 
   local node_ready="0"
   if command -v node >/dev/null 2>&1; then
@@ -53,10 +53,9 @@ ensure_run_user() {
   fi
 }
 
-install_project() {
+ensure_project() {
   if [[ -d "${INSTALL_DIR}/.git" ]]; then
-    log "更新已有项目..."
-    git -c "safe.directory=${INSTALL_DIR}" -C "${INSTALL_DIR}" pull --ff-only
+    log "项目已存在，保留当前代码。"
   elif [[ -e "${INSTALL_DIR}" ]]; then
     fail "${INSTALL_DIR} 已存在但不是 Git 仓库，请先处理该目录。"
   else
@@ -68,6 +67,13 @@ install_project() {
     || fail "项目中缺少 deploy/${SERVICE_NAME}.service。"
   [[ -f "${INSTALL_DIR}/.env.example" ]] \
     || fail "项目中缺少 .env.example。"
+}
+
+update_project() {
+  [[ -d "${INSTALL_DIR}/.git" ]] \
+    || fail "尚未安装 ANeko-Bot，请先选择安装。"
+  log "拉取最新代码..."
+  git -c "safe.directory=${INSTALL_DIR}" -C "${INSTALL_DIR}" pull --ff-only
 }
 
 prepare_environment() {
@@ -154,8 +160,8 @@ validate_environment() {
   return 0
 }
 
-install_service() {
-  log "安装并启动 systemd 服务..."
+install_service_unit() {
+  log "安装 systemd 服务配置..."
   local rendered_service
   rendered_service="$(mktemp)"
   sed \
@@ -169,10 +175,53 @@ install_service() {
   rm -f "${rendered_service}"
   systemctl daemon-reload
   systemctl enable "${SERVICE_NAME}"
+}
+
+start_or_restart_service() {
   if systemctl is-active --quiet "${SERVICE_NAME}"; then
     systemctl restart "${SERVICE_NAME}"
   else
     systemctl start "${SERVICE_NAME}"
+  fi
+}
+
+install_service() {
+  install_service_unit
+  start_or_restart_service
+}
+
+restart_service() {
+  require_service
+  log "重启 ${SERVICE_NAME}..."
+  systemctl restart "${SERVICE_NAME}"
+}
+
+stop_service() {
+  require_service
+  log "停止 ${SERVICE_NAME}..."
+  systemctl stop "${SERVICE_NAME}"
+}
+
+require_service() {
+  systemctl cat "${SERVICE_NAME}" >/dev/null 2>&1 \
+    || fail "systemd 服务 ${SERVICE_NAME} 尚未安装。"
+}
+
+show_service_status() {
+  require_service
+  systemctl status "${SERVICE_NAME}" --no-pager || true
+  if systemctl is-active --quiet "${SERVICE_NAME}" && command -v curl >/dev/null 2>&1; then
+    printf '\n健康检查：\n'
+    curl --fail --silent --show-error http://127.0.0.1:3000/health || true
+    printf '\n'
+  fi
+}
+
+remove_service() {
+  if systemctl cat "${SERVICE_NAME}" >/dev/null 2>&1; then
+    systemctl disable --now "${SERVICE_NAME}" || true
+    rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
+    systemctl daemon-reload
   fi
 }
 
@@ -186,7 +235,7 @@ print_next_steps() {
 
 配置完成后重新执行：
 
-  sudo bash ${INSTALL_DIR}/deploy/install.sh
+  sudo bash ${INSTALL_DIR}/deploy/install.sh --install
 
 查看状态和日志：
 
@@ -195,21 +244,186 @@ print_next_steps() {
 EOF
 }
 
-main() {
-  require_root
+install_bot() {
   install_system_packages
   ensure_run_user
-  install_project
+  ensure_project
   chown -R "${RUN_USER}:${RUN_USER}" "${INSTALL_DIR}"
   prepare_environment
 
   if ! validate_environment; then
     print_next_steps
-    exit 0
+    return 0
   fi
 
   install_service
   log "部署完成。健康检查：curl http://127.0.0.1:3000/health"
+}
+
+upgrade_bot() {
+  command -v git >/dev/null 2>&1 || fail "未找到 Git，请先选择安装。"
+  update_project
+  [[ -f "${INSTALL_DIR}/deploy/${SERVICE_NAME}.service" ]] \
+    || fail "项目中缺少 deploy/${SERVICE_NAME}.service。"
+  [[ -f "${INSTALL_DIR}/.env.example" ]] \
+    || fail "项目中缺少 .env.example。"
+  ensure_run_user
+  chown -R "${RUN_USER}:${RUN_USER}" "${INSTALL_DIR}"
+  prepare_environment
+
+  if ! validate_environment; then
+    print_next_steps
+    return 0
+  fi
+
+  install_service
+  log "ANeko-Bot 升级完成。"
+}
+
+update_config() {
+  [[ -d "${INSTALL_DIR}" ]] || fail "尚未安装 ANeko-Bot。"
+  [[ -f "${INSTALL_DIR}/.env.example" ]] \
+    || fail "项目中缺少 .env.example。"
+  ensure_run_user
+  if [[ ! -f "${INSTALL_DIR}/.env" ]]; then
+    cp "${INSTALL_DIR}/.env.example" "${INSTALL_DIR}/.env"
+  fi
+  chown "${RUN_USER}:${RUN_USER}" "${INSTALL_DIR}/.env"
+  chmod 600 "${INSTALL_DIR}/.env"
+
+  local editor_default="nano"
+  command -v "${editor_default}" >/dev/null 2>&1 || editor_default="vi"
+  local -a editor_command
+  read -r -a editor_command <<< "${EDITOR:-${editor_default}}"
+  ((${#editor_command[@]} > 0)) || fail "EDITOR 为空。"
+  command -v "${editor_command[0]}" >/dev/null 2>&1 \
+    || fail "找不到编辑器 ${editor_command[0]}，请安装 nano 或设置 EDITOR。"
+  "${editor_command[@]}" "${INSTALL_DIR}/.env"
+  chown "${RUN_USER}:${RUN_USER}" "${INSTALL_DIR}/.env"
+  chmod 600 "${INSTALL_DIR}/.env"
+
+  if ! validate_environment; then
+    log "配置未完整填写，服务没有重启。"
+    return 0
+  fi
+  if systemctl cat "${SERVICE_NAME}" >/dev/null 2>&1; then
+    restart_service
+  else
+    log "配置已更新，服务尚未安装。"
+  fi
+}
+
+uninstall_bot() {
+  local answer=""
+  printf '确定要卸载 ANeko-Bot 及其配置吗？输入 UNINSTALL 确认：' > /dev/tty
+  read -r answer < /dev/tty || true
+  [[ "${answer}" == "UNINSTALL" ]] || {
+    log "已取消卸载。"
+    return 0
+  }
+
+  local user_home=""
+  if id -u "${RUN_USER}" >/dev/null 2>&1; then
+    user_home="$(getent passwd "${RUN_USER}" | cut -d: -f6)"
+  fi
+  remove_service
+  [[ "${INSTALL_DIR}" != "/" && "${INSTALL_DIR}" != "/opt" ]] \
+    || fail "拒绝删除危险安装目录 ${INSTALL_DIR}。"
+  rm -rf -- "${INSTALL_DIR}"
+  if [[ "${user_home}" == "${INSTALL_DIR}" ]]; then
+    userdel "${RUN_USER}" 2>/dev/null || log "运行用户 ${RUN_USER} 未能自动删除，请手动处理。"
+  fi
+  log "ANeko-Bot 已卸载。"
+  return 10
+}
+
+pause_menu() {
+  printf '\n按 Enter 返回管理菜单...' > /dev/tty
+  read -r < /dev/tty || true
+}
+
+run_menu_action() {
+  local action="$1"
+  local code=0
+  if ("${action}"); then
+    code=0
+  else
+    code=$?
+  fi
+  if ((code == 10)); then
+    return 10
+  fi
+  if ((code != 0)); then
+    log "操作失败，请查看上面的错误信息。"
+  fi
+  return 0
+}
+
+show_menu() {
+  while true; do
+    cat > /dev/tty <<EOF
+
+========================================
+          ANeko-Bot 管理菜单
+========================================
+1. 安装 ANeko-Bot
+2. 升级 ANeko-Bot
+3. 卸载 ANeko-Bot
+4. 更新配置
+5. 查看服务状态
+6. 重启服务
+7. 停止服务
+0. 退出
+========================================
+EOF
+    local choice=""
+    printf '请选择操作 [0-7]: ' > /dev/tty
+    read -r choice < /dev/tty || return 0
+    local action=""
+    case "${choice}" in
+      1) action="install_bot" ;;
+      2) action="upgrade_bot" ;;
+      3) action="uninstall_bot" ;;
+      4) action="update_config" ;;
+      5) action="show_service_status" ;;
+      6) action="restart_service" ;;
+      7) action="stop_service" ;;
+      0) return 0 ;;
+      *) log "无效选项。"; pause_menu; continue ;;
+    esac
+
+    local code=0
+    if run_menu_action "${action}"; then
+      code=0
+    else
+      code=$?
+    fi
+    ((code == 10)) && return 0
+    pause_menu
+  done
+}
+
+main() {
+  require_root
+  case "${1:-menu}" in
+    menu|--menu)
+      if [[ -r /dev/tty ]]; then
+        show_menu
+      else
+        install_bot
+      fi
+      ;;
+    install|--install) install_bot ;;
+    upgrade|--upgrade) upgrade_bot ;;
+    uninstall|--uninstall) uninstall_bot ;;
+    config|--config) update_config ;;
+    status|--status) show_service_status ;;
+    restart|--restart) restart_service ;;
+    stop|--stop) stop_service ;;
+    *)
+      fail "未知参数 ${1}。可用参数：--menu、--install、--upgrade、--uninstall、--config、--status、--restart、--stop。"
+      ;;
+  esac
 }
 
 main "$@"

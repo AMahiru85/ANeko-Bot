@@ -41,17 +41,18 @@ QQ 官方 C2C 消息接口
 
 ### 一键部署
 
-脚本会安装 Node.js 22 和 Git，创建 `qqbot` 运行用户，拉取项目并安装 systemd 服务。首次在交互式终端运行时会安全询问三个必填密钥并直接启动；没有终端时会生成配置模板，填写后再次执行脚本：
+执行脚本会进入 ANeko-Bot 管理菜单，可选择安装、升级、卸载、更新配置、查看状态、重启和停止服务。选择安装时，脚本会安装 Node.js 22 和 Git，创建 `qqbot` 运行用户，拉取项目并安装 systemd 服务；首次安装会安全询问三个必填密钥。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/AMahiru85/ANeko-Bot/main/deploy/install.sh | sudo bash
 ```
 
-非交互式运行后配置：
+菜单选项包括：安装、升级、卸载、更新配置、查看服务状态、重启服务、停止服务和退出。
+
+没有交互终端时可以直接执行安装操作：
 
 ```bash
-sudo nano /opt/qq-llm-agent/.env
-sudo bash /opt/qq-llm-agent/deploy/install.sh
+sudo bash /opt/qq-llm-agent/deploy/install.sh --install
 ```
 
 脚本可以重复执行，不会覆盖已有的 `.env`。默认安装目录是 `/opt/qq-llm-agent`，服务名是 `qq-llm-agent`。如需从其他仓库或目录部署，可以在执行前设置 `REPO_URL` 或 `INSTALL_DIR` 环境变量，脚本会同步生成对应的 systemd 路径。
@@ -165,10 +166,10 @@ HTTP_PORT=3000
 
 ### 版本更新
 
-已有部署也可以重新执行一键脚本，它会拉取最新代码并重启服务：
+已有部署可以在管理菜单中选择“升级 ANeko-Bot”，也可以直接执行：
 
 ```bash
-sudo bash /opt/qq-llm-agent/deploy/install.sh
+sudo bash /opt/qq-llm-agent/deploy/install.sh --upgrade
 ```
 
 ## 项目结构
