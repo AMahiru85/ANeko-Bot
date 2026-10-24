@@ -17,7 +17,7 @@
 ## 工作流程
 
 ```text
-QQ 用户私聊
+QQ 用户
     ↓
 QQ 官方 Gateway WebSocket
     ↓ C2C_MESSAGE_CREATE
@@ -39,7 +39,26 @@ QQ 官方 C2C 消息接口
 
 以下命令适用于 Ubuntu 或 Debian。
 
-### 1. 安装 Node.js 22 和 Git
+### 一键部署
+
+脚本会安装 Node.js 22 和 Git，创建 `qqbot` 运行用户，拉取项目并安装 systemd 服务。首次在交互式终端运行时会安全询问三个必填密钥并直接启动；没有终端时会生成配置模板，填写后再次执行脚本：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AMahiru85/ANeko-Bot/main/deploy/install.sh | sudo bash
+```
+
+非交互式运行后配置：
+
+```bash
+sudo nano /opt/qq-llm-agent/.env
+sudo bash /opt/qq-llm-agent/deploy/install.sh
+```
+
+脚本可以重复执行，不会覆盖已有的 `.env`。默认安装目录是 `/opt/qq-llm-agent`，服务名是 `qq-llm-agent`。如需从其他仓库或目录部署，可以在执行前设置 `REPO_URL` 或 `INSTALL_DIR` 环境变量，脚本会同步生成对应的 systemd 路径。
+
+### 手动部署
+
+#### 1. 安装 Node.js 22 和 Git
 
 ```bash
 sudo apt update
@@ -51,7 +70,7 @@ sudo apt install -y nodejs
 node -v
 ```
 
-### 2. 创建运行用户并拉取项目
+#### 2. 创建运行用户并拉取项目
 
 ```bash
 sudo useradd --system --home /opt/qq-llm-agent \
@@ -63,7 +82,7 @@ sudo git clone https://github.com/AMahiru85/ANeko-Bot.git \
 sudo chown -R qqbot:qqbot /opt/qq-llm-agent
 ```
 
-### 3. 配置密钥
+#### 3. 配置密钥
 
 ```bash
 sudo cp /opt/qq-llm-agent/.env.example /opt/qq-llm-agent/.env
@@ -81,7 +100,7 @@ sudo chown qqbot:qqbot /opt/qq-llm-agent/.env
 sudo chmod 600 /opt/qq-llm-agent/.env
 ```
 
-### 4. 安装并启动 systemd 服务
+#### 4. 安装并启动 systemd 服务
 
 ```bash
 sudo cp /opt/qq-llm-agent/deploy/qq-llm-agent.service \
@@ -90,7 +109,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now qq-llm-agent
 ```
 
-### 5. 查看状态和日志
+#### 5. 查看状态和日志
 
 ```bash
 sudo systemctl status qq-llm-agent
@@ -144,14 +163,12 @@ SYSTEM_PROMPT=你是一个可靠、简洁的 QQ 私聊助手。请用中文回�
 HTTP_PORT=3000
 ```
 
-### 6. 更新代码（已有部署时）
+### 版本更新
 
-首次部署不需要执行这一步。以后代码推送到 GitHub 后，在服务器执行下面的命令拉取新版本并重启服务：
+已有部署也可以重新执行一键脚本，它会拉取最新代码并重启服务：
 
 ```bash
-cd /opt/qq-llm-agent
-sudo git pull --ff-only
-sudo systemctl restart qq-llm-agent
+sudo bash /opt/qq-llm-agent/deploy/install.sh
 ```
 
 ## 项目结构
@@ -165,6 +182,7 @@ src/
 ├── qq-api.mjs       # QQ Access Token 和 C2C REST API
 └── qq-gateway.mjs   # QQ Gateway WebSocket、心跳和 Resume
 deploy/
+├── install.sh             # Ubuntu/Debian 一键部署脚本
 └── qq-llm-agent.service  # systemd 服务配置
 .env.example         # 环境变量模板
 package.json         # 项目元数据与运行命令
