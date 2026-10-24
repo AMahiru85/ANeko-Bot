@@ -36,11 +36,10 @@ QQ 官方 C2C 消息接口
 
 1. 在 [QQ 开放平台](https://q.qq.com/) 创建机器人。
 2. 获取 `AppID` 和 `AppSecret`。
-3. 开启 C2C 私聊消息事件。
-4. 配置 `GROUP_AND_C2C_EVENT` Intent，默认值为 `33554432`（`1 << 25`）。
-5. 将测试账号加入机器人可用范围。
+3. 在事件订阅或消息权限中开启 C2C 私聊消息。
+4. 将测试账号加入机器人可用范围。
 
-官方机器人通常只能向平台允许的测试用户或已建立会话的用户回复。具体权限以开放平台后台为准。
+`QQ_INTENTS` 不是开放平台后台的输入项，而是程序连接 Gateway 时发送的 `Identify` 位掩码。代码默认使用 `33554432`（`1 << 25`），通常不需要修改。官方机器人通常只能向平台允许的测试用户或已建立会话的用户回复，具体权限以开放平台后台为准。
 
 ## 环境变量
 
@@ -52,7 +51,7 @@ QQ 官方 C2C 消息接口
 | `QQ_CLIENT_SECRET` | 是 | - | QQ 机器人 AppSecret |
 | `QQ_API_BASE` | 否 | `https://api.bot.qq.com` | QQ OpenAPI 地址 |
 | `QQ_GATEWAY_URL` | 否 | 自动获取 | 自定义 Gateway 地址 |
-| `QQ_INTENTS` | 否 | `33554432` | C2C 私聊事件 Intent |
+| `QQ_INTENTS` | 否 | `33554432` | Gateway Identify 位掩码，通常不需要修改 |
 | `LLM_API_KEY` | 是 | - | LLM 服务商 API Key |
 | `LLM_BASE_URL` | 否 | `https://api.deepseek.com` | OpenAI 兼容 API 根地址 |
 | `LLM_MODEL` | 否 | `deepseek-chat` | 模型名称 |
@@ -190,7 +189,7 @@ package.json         # 项目元数据与运行命令
 | --- | --- |
 | 启动后立即退出 | 检查 `QQ_APP_ID`、`QQ_CLIENT_SECRET`、`LLM_API_KEY` 是否填写 |
 | QQ 返回 `appid invalid` | 检查 AppID、机器人状态和开放平台环境 |
-| 没有收到私聊事件 | 检查 C2C 事件权限、`QQ_INTENTS=33554432` 和测试账号范围 |
+| 没有收到私聊事件 | 检查后台是否开启 C2C 私聊权限、测试账号范围和 Gateway 日志 |
 | Gateway 报 `4014` | 当前机器人没有对应 Intent 权限，调整开放平台事件订阅 |
 | LLM 返回 `401` | 检查 `LLM_API_KEY` |
 | LLM 返回 `404` | 检查 `LLM_BASE_URL` 是否包含正确的 API 根地址以及模型名称 |
