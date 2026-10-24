@@ -7,6 +7,16 @@ INSTALL_DIR="${INSTALL_DIR:-/opt/qq-llm-agent}"
 SERVICE_NAME="qq-llm-agent"
 RUN_USER="qqbot"
 NODE_MAJOR="22"
+TTY_ECHO_STATE=""
+
+restore_tty() {
+  if [[ -n "${TTY_ECHO_STATE}" ]]; then
+    stty "${TTY_ECHO_STATE}" < /dev/tty 2>/dev/null || true
+    TTY_ECHO_STATE=""
+  fi
+}
+
+trap restore_tty EXIT
 
 log() {
   printf '[qq-llm-agent] %s\n' "$*"
@@ -94,6 +104,7 @@ prepare_environment() {
 set_env_value() {
   local key="$1"
   local value="$2"
+  local env_file="${3:-${INSTALL_DIR}/.env}"
   local rendered_env
   rendered_env="$(mktemp)"
   KEY="${key}" VALUE="${value}" awk -F= '
@@ -106,30 +117,134 @@ set_env_value() {
     END {
       if (!replaced) print ENVIRON["KEY"] "=" ENVIRON["VALUE"]
     }
-  ' "${INSTALL_DIR}/.env" > "${rendered_env}"
-  mv "${rendered_env}" "${INSTALL_DIR}/.env"
+  ' "${env_file}" > "${rendered_env}"
+  mv "${rendered_env}" "${env_file}"
+}
+
+get_env_value() {
+  local key="$1"
+  local env_file="${2:-${INSTALL_DIR}/.env}"
+  awk -F= -v key="${key}" '
+    $1 == key {
+      value = substr($0, index($0, "=") + 1)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      single_quote = sprintf("%c", 39)
+      if ((substr(value, 1, 1) == "\"" && substr(value, length(value), 1) == "\"") || (substr(value, 1, 1) == single_quote && substr(value, length(value), 1) == single_quote)) {
+        value = substr(value, 2, length(value) - 2)
+      }
+      print value
+      exit
+    }
+  ' "${env_file}"
+}
+
+read_tty_value() {
+  local prompt="$1"
+  local secret="${2:-0}"
+  REPLY=""
+  printf '%s' "${prompt}" > /dev/tty
+  if [[ "${secret}" == "1" ]]; then
+    TTY_ECHO_STATE="$(stty -g < /dev/tty)"
+    stty -echo < /dev/tty
+    IFS= read -r REPLY < /dev/tty || true
+    restore_tty
+    printf '\n' > /dev/tty
+  else
+    IFS= read -r REPLY < /dev/tty || true
+  fi
 }
 
 configure_initial_environment() {
-  local qq_app_id=""
-  local qq_client_secret=""
-  local llm_api_key=""
+  local -a keys=(
+    QQ_APP_ID QQ_CLIENT_SECRET QQ_API_BASE QQ_GATEWAY_URL QQ_INTENTS
+    LLM_API_KEY LLM_BASE_URL LLM_MODEL SYSTEM_PROMPT HTTP_PORT
+  )
+  local -a labels=(
+    QQ_APP_ID QQ_CLIENT_SECRET QQ_API_BASE QQ_GATEWAY_URL QQ_INTENTS
+    LLM_API_KEY LLM_BASE_URL LLM_MODEL SYSTEM_PROMPT HTTP_PORT
+  )
+  local -a required=(1 1 0 0 0 1 0 0 0 0)
+  local -a secret=(0 1 0 0 0 1 0 0 0 0)
+  local -a values=()
+  local index=0
+  local key=""
+  local label=""
+  local default=""
+  local value=""
+  local confirmation=""
+  local prompt=""
+  local rendered_env=""
 
-  log "首次部署可直接填写必填密钥（输入内容不会回显）。"
-  read -r -p "QQ_APP_ID: " qq_app_id < /dev/tty || true
-  read -r -s -p "QQ_CLIENT_SECRET: " qq_client_secret < /dev/tty || true
-  printf '\n' > /dev/tty
-  read -r -s -p "LLM_API_KEY: " llm_api_key < /dev/tty || true
-  printf '\n' > /dev/tty
+  log "首次安装将逐项配置全部环境变量。"
+  log "可选项直接回车使用默认值；输入 :back 返回上一项，输入 :cancel 取消配置。"
+  log "QQ_CLIENT_SECRET 和 LLM_API_KEY 输入时不会回显，输入后按回车即可。"
 
-  if [[ -z "${qq_app_id}" || -z "${qq_client_secret}" || -z "${llm_api_key}" ]]; then
-    log "检测到必填密钥为空，将保留模板并跳过启动。"
-    return 0
-  fi
+  while ((index < ${#keys[@]})); do
+    key="${keys[index]}"
+    label="${labels[index]}"
+    default="$(get_env_value "${key}")"
+    if [[ "${required[index]}" == "1" ]]; then
+      prompt="${label}（必填，输入 :back 返回上一项，:cancel 取消）： "
+    elif [[ -n "${default}" ]]; then
+      prompt="${label}（回车使用默认值：${default}；输入 :back 返回上一项）： "
+    else
+      prompt="${label}（回车留空；输入 :back 返回上一项）： "
+    fi
 
-  set_env_value "QQ_APP_ID" "${qq_app_id}"
-  set_env_value "QQ_CLIENT_SECRET" "${qq_client_secret}"
-  set_env_value "LLM_API_KEY" "${llm_api_key}"
+    read_tty_value "${prompt}" "${secret[index]}"
+    value="${REPLY}"
+    if [[ "${value}" == ":cancel" ]]; then
+      log "已取消配置，保留当前模板。"
+      return 0
+    fi
+    if [[ "${value}" == ":back" ]]; then
+      if ((index > 0)); then
+        index=$((index - 1))
+      else
+        log "已经是第一项，无法继续回退。"
+      fi
+      continue
+    fi
+    if [[ "${required[index]}" == "1" && -z "${value}" ]]; then
+      log "${label} 为必填项，不能为空。"
+      continue
+    fi
+    if [[ "${required[index]}" != "1" && -z "${value}" ]]; then
+      value="${default}"
+    fi
+
+    if [[ "${required[index]}" == "1" ]]; then
+      read_tty_value "请再次输入 ${label} 确认（输入 :back 返回上一项）： " "${secret[index]}"
+      confirmation="${REPLY}"
+      if [[ "${confirmation}" == ":cancel" ]]; then
+        log "已取消配置，保留当前模板。"
+        return 0
+      fi
+      if [[ "${confirmation}" == ":back" ]]; then
+        if ((index > 0)); then
+          index=$((index - 1))
+        else
+          log "已经是第一项，无法继续回退。"
+        fi
+        continue
+      fi
+      if [[ "${value}" != "${confirmation}" ]]; then
+        log "两次输入不一致，请重新填写 ${label}。"
+        continue
+      fi
+    fi
+
+    values[index]="${value}"
+    index=$((index + 1))
+  done
+
+  rendered_env="$(mktemp)"
+  cp "${INSTALL_DIR}/.env" "${rendered_env}"
+  for index in "${!keys[@]}"; do
+    set_env_value "${keys[index]}" "${values[index]}" "${rendered_env}"
+  done
+  mv "${rendered_env}" "${INSTALL_DIR}/.env"
+  log "环境变量配置完成。"
 }
 
 has_config_value() {

@@ -45,6 +45,8 @@ QQ 官方 C2C 消息接口
 curl -fsSL https://raw.githubusercontent.com/AMahiru85/ANeko-Bot/main/deploy/install.sh | sudo bash
 ```
 
+进入菜单后选择“安装 ANeko-Bot”。安装向导会逐项询问 `.env.example` 中的全部变量；非必填项直接回车使用默认值，必填项需要重复输入确认。每一步输入 `:back` 可返回上一项，输入 `:cancel` 可取消本次配置。
+
 ### 手动部署
 
 #### 1. 安装 Node.js 22 和 Git
