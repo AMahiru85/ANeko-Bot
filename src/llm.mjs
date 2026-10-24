@@ -1,4 +1,4 @@
-export class DeepSeekClient {
+export class LlmClient {
   constructor({ apiKey, baseUrl, model, systemPrompt }) {
     this.apiKey = apiKey;
     this.baseUrl = baseUrl.replace(/\/$/, "");
@@ -28,12 +28,12 @@ export class DeepSeekClient {
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
       const detail = body?.error?.message || JSON.stringify(body);
-      throw new Error(`DeepSeek API ${response.status}: ${detail}`);
+      throw new Error(`LLM API ${response.status}: ${detail}`);
     }
 
     const content = body?.choices?.[0]?.message?.content;
     if (typeof content !== "string" || !content.trim()) {
-      throw new Error("DeepSeek returned an empty response");
+      throw new Error("LLM returned an empty response");
     }
     return content.trim();
   }

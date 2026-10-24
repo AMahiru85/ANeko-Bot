@@ -100,8 +100,8 @@ export class QQGateway {
               shard: [0, 1],
               properties: {
                 "$os": "linux",
-                "$browser": "qq-deepseek-agent",
-                "$device": "qq-deepseek-agent",
+              "$browser": "qq-llm-agent",
+              "$device": "qq-llm-agent",
               },
             },
           });

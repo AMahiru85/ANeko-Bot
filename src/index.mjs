@@ -1,15 +1,15 @@
 import http from "node:http";
 import { config } from "./config.mjs";
 import { ConversationStore } from "./memory.mjs";
-import { DeepSeekClient } from "./deepseek.mjs";
+import { LlmClient } from "./llm.mjs";
 import { QQApi } from "./qq-api.mjs";
 import { QQGateway } from "./qq-gateway.mjs";
 
 const memory = new ConversationStore(config.historyLimit);
-const deepseek = new DeepSeekClient({
-  apiKey: config.deepseekApiKey,
-  baseUrl: config.deepseekBaseUrl,
-  model: config.deepseekModel,
+const llm = new LlmClient({
+  apiKey: config.llmApiKey,
+  baseUrl: config.llmBaseUrl,
+  model: config.llmModel,
   systemPrompt: config.systemPrompt,
 });
 const qqApi = new QQApi({
@@ -76,7 +76,7 @@ async function handleEvent(type, data) {
     history.push({ role: "user", content: text });
 
     try {
-      const answer = await deepseek.chat(history);
+      const answer = await llm.chat(history);
       memory.append(userId, { role: "user", content: text }, { role: "assistant", content: answer });
       await qqApi.sendC2CMessage(userId, answer, messageId);
       markProcessed(messageId);
@@ -94,7 +94,7 @@ async function handleEvent(type, data) {
 const server = http.createServer((request, response) => {
   if (request.url === "/health" && request.method === "GET") {
     response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    response.end(JSON.stringify({ ok: true, service: "qq-deepseek-agent" }));
+    response.end(JSON.stringify({ ok: true, service: "qq-llm-agent" }));
     return;
   }
   response.writeHead(404);
