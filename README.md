@@ -2,8 +2,6 @@
 
 基于 Node.js 的 QQ 官方机器人私聊 Agent。服务通过 QQ 官方 Gateway 接收 `C2C_MESSAGE_CREATE` 事件，调用 OpenAI 兼容格式的 LLM API，使用 QQ 官方 API 回复。
 
-项目使用官方 Bot 身份和 Access Token，不需要 NapCat、个人 QQ 登录或公网回调地址。
-
 ## 项目
 
 | 能力 | 说明 |
@@ -111,7 +109,7 @@ curl http://127.0.0.1:3000/health
 {"ok":true,"service":"qq-llm-agent"}
 ```
 
-服务器不需要开放公网端口，只要允许访问 QQ 官方 API、Gateway 和 LLM 服务商的 HTTPS/WSS 地址即可。后台不需要单独配置 C2C 私聊权限，程序会使用 `QQ_INTENTS=33554432` 订阅对应事件。
+服务器不需要开放公网端口，只要允许访问 QQ 官方 API、Gateway 和 LLM 服务商的 HTTPS/WSS 地址即可。
 
 ## 环境变量
 
@@ -146,7 +144,9 @@ SYSTEM_PROMPT=你是一个可靠、简洁的 QQ 私聊助手。请用中文回�
 HTTP_PORT=3000
 ```
 
-### 更新代码
+### 6. 更新代码（已有部署时）
+
+首次部署不需要执行这一步。以后代码推送到 GitHub 后，在服务器执行下面的命令拉取新版本并重启服务：
 
 ```bash
 cd /opt/qq-llm-agent
