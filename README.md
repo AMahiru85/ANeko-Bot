@@ -1,16 +1,16 @@
 # ANeko Bot
 
-基于 Node.js 的 QQ 官方机器人私聊 Agent。服务通过 QQ 官方 Gateway 接收 `C2C_MESSAGE_CREATE` 事件，调用 OpenAI 兼容格式的 LLM API，再通过 QQ 官方 API 回复用户。
+基于 Node.js 的 QQ 官方机器人私聊 Agent。服务通过 QQ 官方 Gateway 接收 `C2C_MESSAGE_CREATE` 事件，调用 OpenAI 兼容格式的 LLM API，使用 QQ 官方 API 回复。
 
 项目使用官方 Bot 身份和 Access Token，不需要 NapCat、个人 QQ 登录或公网回调地址。
 
-## 项目能力
+## 项目
 
 | 能力 | 说明 |
 | --- | --- |
 | QQ 私聊 | 接收并回复 `C2C_MESSAGE_CREATE` 事件 |
 | LLM 对话 | 支持 DeepSeek 以及其他 OpenAI 兼容接口 |
-| 会话记忆 | 按用户保存最近若干轮对话，进程重启后清空 |
+| 会话记忆 | 按用户保存当前进程内的完整对话，进程重启后清空 |
 | 消息去重 | 防止 QQ 重复推送导致重复调用和重复回复 |
 | Gateway 保活 | 自动心跳、断线重连和 Session Resume |
 | 管理命令 | 发送 `/reset` 或 `/clear` 清空当前用户上下文 |
@@ -37,7 +37,7 @@ QQ 官方 C2C 消息接口
 1. 在 [QQ 开放平台](https://q.qq.com/) 创建机器人。
 2. 获取 `AppID` 和 `AppSecret`。
 
-## Linux 部署
+## 部署
 
 以下命令适用于 Ubuntu 或 Debian。
 
@@ -76,7 +76,7 @@ sudo nano /opt/qq-llm-agent/.env
 
 具体配置请参考[环境变量表](#环境变量)。
 
-保存后限制权限：
+保存后设置权限：
 
 ```bash
 sudo chown qqbot:qqbot /opt/qq-llm-agent/.env
@@ -126,10 +126,11 @@ curl http://127.0.0.1:3000/health
 | `LLM_BASE_URL` | 否 | `https://api.deepseek.com` | OpenAI 兼容 API 根地址 |
 | `LLM_MODEL` | 否 | `deepseek-chat` | 模型名称 |
 | `SYSTEM_PROMPT` | 否 | 中文助手提示词 | Agent 的系统提示词 |
-| `HISTORY_LIMIT` | 否 | `12` | 每个用户保留的消息条数 |
 | `HTTP_PORT` | 否 | `3000` | 本机健康检查端口 |
 
 默认配置使用 DeepSeek 作为示例。切换到其他 OpenAI 兼容服务时，只需要修改 `LLM_API_KEY`、`LLM_BASE_URL` 和 `LLM_MODEL`。
+
+服务不会主动截断对话历史；历史记录保存在进程内存中，重启服务后清空。
 
 示例：
 
@@ -142,7 +143,6 @@ LLM_API_KEY=your-llm-api-key
 LLM_BASE_URL=https://api.deepseek.com
 LLM_MODEL=deepseek-chat
 SYSTEM_PROMPT=你是一个可靠、简洁的 QQ 私聊助手。请用中文回答，无法确定时明确说明。
-HISTORY_LIMIT=12
 HTTP_PORT=3000
 ```
 
@@ -161,7 +161,7 @@ src/
 ├── config.mjs       # 环境变量加载与校验
 ├── index.mjs        # 服务入口、消息处理和健康检查
 ├── llm.mjs          # OpenAI 兼容 LLM 客户端
-├── memory.mjs       # 按用户隔离的短期会话记忆
+├── memory.mjs       # 按用户隔离的完整进程内会话记忆
 ├── qq-api.mjs       # QQ Access Token 和 C2C REST API
 └── qq-gateway.mjs   # QQ Gateway WebSocket、心跳和 Resume
 deploy/

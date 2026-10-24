@@ -5,7 +5,7 @@ import { LlmClient } from "./llm.mjs";
 import { QQApi } from "./qq-api.mjs";
 import { QQGateway } from "./qq-gateway.mjs";
 
-const memory = new ConversationStore(config.historyLimit);
+const memory = new ConversationStore();
 const llm = new LlmClient({
   apiKey: config.llmApiKey,
   baseUrl: config.llmBaseUrl,

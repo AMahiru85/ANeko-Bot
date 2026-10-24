@@ -43,7 +43,6 @@ export const config = {
   llmBaseUrl: process.env.LLM_BASE_URL?.trim() || "https://api.deepseek.com",
   llmModel: process.env.LLM_MODEL?.trim() || "deepseek-chat",
   systemPrompt: process.env.SYSTEM_PROMPT?.trim() || "你是一个可靠、简洁的 QQ 私聊助手。请用中文回答，无法确定时明确说明。",
-  historyLimit: Math.max(2, Number.parseInt(process.env.HISTORY_LIMIT || "12", 10)),
   httpPort: Number.parseInt(process.env.HTTP_PORT || "3000", 10),
 };
 
