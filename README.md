@@ -49,13 +49,34 @@ curl -fsSL https://raw.githubusercontent.com/AMahiru85/ANeko-Bot/main/deploy/ins
 
 菜单选项包括：安装、升级、卸载、更新配置、查看服务状态、重启服务、停止服务和退出。
 
-没有交互终端时可以直接执行安装操作：
+脚本可以重复执行，不会覆盖已有的 `.env`。默认安装目录是 `/opt/qq-llm-agent`，服务名是 `qq-llm-agent`。如需从其他仓库或目录部署，可以在执行前设置 `REPO_URL` 或 `INSTALL_DIR` 环境变量，脚本会同步生成对应的 systemd 路径。
+
+#### 脚本参数
+
+| 参数 | 作用 |
+| --- | --- |
+| 无参数、`--menu` | 打开 ANeko-Bot 管理菜单；默认行为 |
+| `--install` | 安装 ANeko-Bot，创建配置；配置完整后启动服务 |
+| `--upgrade` | 拉取最新代码，更新 systemd 配置；配置完整后重启服务 |
+| `--uninstall` | 停止并删除服务、项目目录和运行用户；需要输入 `UNINSTALL` 确认 |
+| `--config` | 编辑 `.env` 配置，配置有效后自动重启服务 |
+| `--status` | 查看 systemd 服务状态和本机健康检查 |
+| `--restart` | 重启服务 |
+| `--stop` | 停止服务 |
+
+部署变量：
+
+| 变量 | 默认值 | 作用 |
+| --- | --- | --- |
+| `REPO_URL` | `https://github.com/AMahiru85/ANeko-Bot.git` | 指定要拉取的 Git 仓库 |
+| `INSTALL_DIR` | `/opt/qq-llm-agent` | 指定项目安装目录，脚本会同步生成 systemd 路径 |
+
+示例：
 
 ```bash
-sudo bash /opt/qq-llm-agent/deploy/install.sh --install
+sudo bash /opt/qq-llm-agent/deploy/install.sh --status
+sudo bash /opt/qq-llm-agent/deploy/install.sh --config
 ```
-
-脚本可以重复执行，不会覆盖已有的 `.env`。默认安装目录是 `/opt/qq-llm-agent`，服务名是 `qq-llm-agent`。如需从其他仓库或目录部署，可以在执行前设置 `REPO_URL` 或 `INSTALL_DIR` 环境变量，脚本会同步生成对应的 systemd 路径。
 
 ### 手动部署
 
