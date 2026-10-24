@@ -37,45 +37,12 @@ QQ 官方 C2C 消息接口
 
 ## 部署
 
-以下命令适用于 Ubuntu 或 Debian。
+以下命令适用于使用 systemd 的发行版（Ubuntu、Debian...）
 
 ### 一键部署
 
-执行脚本会进入 ANeko-Bot 管理菜单，可选择安装、升级、卸载、更新配置、查看状态、重启和停止服务。选择安装时，脚本会安装 Node.js 22 和 Git，创建 `qqbot` 运行用户，拉取项目并安装 systemd 服务；首次安装会安全询问三个必填密钥。
-
 ```bash
 curl -fsSL https://raw.githubusercontent.com/AMahiru85/ANeko-Bot/main/deploy/install.sh | sudo bash
-```
-
-菜单选项包括：安装、升级、卸载、更新配置、查看服务状态、重启服务、停止服务和退出。
-
-脚本可以重复执行，不会覆盖已有的 `.env`。默认安装目录是 `/opt/qq-llm-agent`，服务名是 `qq-llm-agent`。如需从其他仓库或目录部署，可以在执行前设置 `REPO_URL` 或 `INSTALL_DIR` 环境变量，脚本会同步生成对应的 systemd 路径。
-
-#### 脚本参数
-
-| 参数 | 作用 |
-| --- | --- |
-| 无参数、`--menu` | 打开 ANeko-Bot 管理菜单；默认行为 |
-| `--install` | 安装 ANeko-Bot，创建配置；配置完整后启动服务 |
-| `--upgrade` | 拉取最新代码，更新 systemd 配置；配置完整后重启服务 |
-| `--uninstall` | 停止并删除服务、项目目录和运行用户；需要输入 `UNINSTALL` 确认 |
-| `--config` | 编辑 `.env` 配置，配置有效后自动重启服务 |
-| `--status` | 查看 systemd 服务状态和本机健康检查 |
-| `--restart` | 重启服务 |
-| `--stop` | 停止服务 |
-
-部署变量：
-
-| 变量 | 默认值 | 作用 |
-| --- | --- | --- |
-| `REPO_URL` | `https://github.com/AMahiru85/ANeko-Bot.git` | 指定要拉取的 Git 仓库 |
-| `INSTALL_DIR` | `/opt/qq-llm-agent` | 指定项目安装目录，脚本会同步生成 systemd 路径 |
-
-示例：
-
-```bash
-sudo bash /opt/qq-llm-agent/deploy/install.sh --status
-sudo bash /opt/qq-llm-agent/deploy/install.sh --config
 ```
 
 ### 手动部署
@@ -150,7 +117,7 @@ curl http://127.0.0.1:3000/health
 {"ok":true,"service":"qq-llm-agent"}
 ```
 
-服务器不需要开放公网端口，只要允许访问 QQ 官方 API、Gateway 和 LLM 服务商的 HTTPS/WSS 地址即可。
+服务器不需要开放公网端口，可访问 QQ 官方 API、Gateway 和 LLM 服务商的 HTTPS/WSS 地址即可。
 
 ## 环境变量
 
@@ -185,14 +152,6 @@ SYSTEM_PROMPT=你是一个可靠、简洁的 QQ 私聊助手。请用中文回�
 HTTP_PORT=3000
 ```
 
-### 版本更新
-
-已有部署可以在管理菜单中选择“升级 ANeko-Bot”，也可以直接执行：
-
-```bash
-sudo bash /opt/qq-llm-agent/deploy/install.sh --upgrade
-```
-
 ## 项目结构
 
 ```text
@@ -204,7 +163,7 @@ src/
 ├── qq-api.mjs       # QQ Access Token 和 C2C REST API
 └── qq-gateway.mjs   # QQ Gateway WebSocket、心跳和 Resume
 deploy/
-├── install.sh             # Ubuntu/Debian 一键部署脚本
+├── install.sh             # 部署脚本
 └── qq-llm-agent.service  # systemd 服务配置
 .env.example         # 环境变量模板
 package.json         # 项目元数据与运行命令
