@@ -38,8 +38,6 @@ QQ 官方 C2C 消息接口
 2. 获取 `AppID` 和 `AppSecret`。
 3. 将测试账号加入机器人可用范围。
 
-后台没有单独的 C2C 私聊权限设置是正常的。`QQ_INTENTS` 也不是后台输入项，而是程序连接 Gateway 时发送的 `Identify` 位掩码。代码默认使用 `33554432`（`1 << 25`），通常不需要修改。官方机器人通常只能向平台允许的测试用户或已建立会话的用户回复。
-
 ## 环境变量
 
 复制 `.env.example` 为 `.env`，按下表填写：
@@ -79,19 +77,21 @@ HTTP_PORT=3000
 
 ## Linux 部署
 
-### 安装运行环境
+以下命令适用于 Ubuntu 或 Debian。
 
-以下命令适用于 Ubuntu 或 Debian：
+### 1. 安装 Node.js 22 和 Git
 
 ```bash
 sudo apt update
 sudo apt install -y git curl
+
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt install -y nodejs
-node --version
+
+node -v
 ```
 
-### 部署项目
+### 2. 创建运行用户并拉取项目
 
 ```bash
 sudo useradd --system --home /opt/qq-llm-agent \
@@ -101,12 +101,35 @@ sudo git clone https://github.com/AMahiru85/ANeko-Bot.git \
   /opt/qq-llm-agent
 
 sudo chown -R qqbot:qqbot /opt/qq-llm-agent
+```
+
+### 3. 配置密钥
+
+```bash
 sudo cp /opt/qq-llm-agent/.env.example /opt/qq-llm-agent/.env
 sudo nano /opt/qq-llm-agent/.env
+```
+
+填写 QQ 和 LLM 配置：
+
+```ini
+QQ_APP_ID=你的QQ机器人AppID
+QQ_CLIENT_SECRET=你的AppSecret
+QQ_INTENTS=33554432
+
+LLM_API_KEY=你的LLM_API_Key
+LLM_BASE_URL=https://api.deepseek.com
+LLM_MODEL=deepseek-chat
+```
+
+保存后限制权限：
+
+```bash
+sudo chown qqbot:qqbot /opt/qq-llm-agent/.env
 sudo chmod 600 /opt/qq-llm-agent/.env
 ```
 
-### 注册 systemd 服务
+### 4. 安装并启动 systemd 服务
 
 ```bash
 sudo cp /opt/qq-llm-agent/deploy/qq-llm-agent.service \
@@ -115,32 +138,34 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now qq-llm-agent
 ```
 
-查看运行状态：
+### 5. 查看状态和日志
 
 ```bash
 sudo systemctl status qq-llm-agent
 sudo journalctl -u qq-llm-agent -f
 ```
 
-服务只需要主动访问 QQ 和 LLM 服务商的 HTTPS/WSS 地址，不需要开放公网端口。健康检查仅监听 `127.0.0.1`。
+健康检查：
 
-### 更新项目
+```bash
+curl http://127.0.0.1:3000/health
+```
+
+返回以下内容说明服务已启动：
+
+```json
+{"ok":true,"service":"qq-llm-agent"}
+```
+
+服务器不需要开放公网端口，只要允许访问 QQ 官方 API、Gateway 和 LLM 服务商的 HTTPS/WSS 地址即可。后台不需要单独配置 C2C 私聊权限，程序会使用 `QQ_INTENTS=33554432` 订阅对应事件。
+
+### 更新代码
 
 ```bash
 cd /opt/qq-llm-agent
 sudo git pull --ff-only
 sudo systemctl restart qq-llm-agent
 ```
-
-## 服务器配置
-
-| 使用规模 | 建议配置 |
-| --- | --- |
-| 个人测试 | 1 核 CPU、1 GB 内存、10 GB SSD |
-| 长期运行 | 2 核 CPU、2 GB 内存、20 GB SSD |
-| 较多并发 | 2-4 核 CPU、4 GB 内存 |
-
-当前项目调用云端 LLM，不需要 GPU。对话记录保存在进程内存中，重启服务后会清空。
 
 ## 项目结构
 
@@ -158,19 +183,6 @@ deploy/
 package.json         # 项目元数据与运行命令
 LICENSE              # MIT 许可证
 ```
-
-## 故障排查
-
-| 现象 | 检查项 |
-| --- | --- |
-| 启动后立即退出 | 检查 `QQ_APP_ID`、`QQ_CLIENT_SECRET`、`LLM_API_KEY` 是否填写 |
-| QQ 返回 `appid invalid` | 检查 AppID、机器人状态和开放平台环境 |
-| 没有收到私聊事件 | 检查 AppID/AppSecret、测试账号范围、`QQ_INTENTS` 和 Gateway 日志 |
-| Gateway 报 `4014` | 当前机器人没有对应 Intent 权限，调整开放平台事件订阅 |
-| LLM 返回 `401` | 检查 `LLM_API_KEY` |
-| LLM 返回 `404` | 检查 `LLM_BASE_URL` 是否包含正确的 API 根地址以及模型名称 |
-| 健康检查正常但不回复 | 查看 `journalctl -u qq-llm-agent -f`，确认 Gateway 和 LLM 请求状态 |
-| 回复消息过期 | 检查服务器网络和 LLM 响应耗时，确保服务能及时处理事件 |
 
 ## 源码与许可
 
