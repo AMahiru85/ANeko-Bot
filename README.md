@@ -77,30 +77,6 @@ HTTP_PORT=3000
 
 不要把 `.env` 或任何 API Key 提交到 Git。
 
-## 本地运行
-
-要求 Node.js 22.4 或更高版本。项目使用 Node.js 内置的 `fetch` 和 WebSocket，不需要额外安装运行时依赖。
-
-```bash
-git clone https://github.com/AMahiru85/ANeko-Bot.git
-cd ANeko-Bot
-cp .env.example .env
-# 编辑 .env
-node src/index.mjs
-```
-
-健康检查：
-
-```bash
-curl http://127.0.0.1:3000/health
-```
-
-成功响应：
-
-```json
-{"ok":true,"service":"qq-llm-agent"}
-```
-
 ## Linux 部署
 
 ### 安装运行环境
@@ -180,6 +156,7 @@ deploy/
 └── qq-llm-agent.service  # systemd 服务配置
 .env.example         # 环境变量模板
 package.json         # 项目元数据与运行命令
+LICENSE              # MIT 许可证
 ```
 
 ## 故障排查
@@ -195,10 +172,10 @@ package.json         # 项目元数据与运行命令
 | 健康检查正常但不回复 | 查看 `journalctl -u qq-llm-agent -f`，确认 Gateway 和 LLM 请求状态 |
 | 回复消息过期 | 检查服务器网络和 LLM 响应耗时，确保服务能及时处理事件 |
 
-## 源码与许可证
+## 源码与许可
 
 | 项目 | 地址 |
 | --- | --- |
 | 源码仓库 | [AMahiru85/ANeko-Bot](https://github.com/AMahiru85/ANeko-Bot) |
 | QQ 官方机器人文档 | [bot.q.qq.com](https://bot.q.qq.com/wiki/develop/api-v2/) |
-| 许可证 | 暂未声明 |
+| 许可证 | [MIT](LICENSE) |
