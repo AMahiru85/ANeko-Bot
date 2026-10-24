@@ -16,7 +16,7 @@ export class LlmClient {
       body: JSON.stringify({
         model: this.model,
         messages: [
-          { role: "system", content: this.systemPrompt },
+          ...(this.systemPrompt ? [{ role: "system", content: this.systemPrompt }] : []),
           ...history,
         ],
         temperature: 0.7,

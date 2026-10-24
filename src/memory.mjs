@@ -4,7 +4,7 @@ export class ConversationStore {
   }
 
   get(userId) {
-    return [...(this.conversations.get(userId) || [])];
+    return this.conversations.get(userId) || [];
   }
 
   append(userId, ...messages) {
@@ -15,5 +15,10 @@ export class ConversationStore {
 
   clear(userId) {
     this.conversations.delete(userId);
+  }
+
+  removeLast(userId, message) {
+    const history = this.conversations.get(userId);
+    if (history?.at(-1) === message) history.pop();
   }
 }

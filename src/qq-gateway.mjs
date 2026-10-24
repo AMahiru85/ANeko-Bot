@@ -30,29 +30,34 @@ export class QQGateway {
 
     try {
       const gatewayUrl = await this.api.getGatewayUrl();
-      const token = await this.api.getGatewayToken();
+      const token = await this.api.getAccessToken();
       const socket = new WebSocket(gatewayUrl);
       this.socket = socket;
+      let frameQueue = Promise.resolve();
 
       socket.onopen = () => {
+        if (this.socket !== socket) return;
         this.reconnectDelay = 1_000;
         console.log(`[QQ] connected to ${gatewayUrl}`);
       };
 
-      socket.onmessage = async (event) => {
-        try {
+      socket.onmessage = (event) => {
+        if (this.socket !== socket) return;
+        frameQueue = frameQueue.then(async () => {
           const frame = await decodeFrame(event.data);
-          await this.handleFrame(frame, token);
-        } catch (error) {
+          this.handleFrame(frame, token, socket);
+        }).catch((error) => {
           this.reportError(error);
-        }
+        });
       };
 
       socket.onerror = () => {
+        if (this.socket !== socket) return;
         this.reportError(new Error("QQ Gateway WebSocket error"));
       };
 
       socket.onclose = () => {
+        if (this.socket !== socket) return;
         clearInterval(this.heartbeatTimer);
         this.socket = null;
         if (!this.stopped) this.scheduleReconnect();
@@ -63,16 +68,19 @@ export class QQGateway {
     }
   }
 
-  async handleFrame(frame, token) {
+  handleFrame(frame, token, socket) {
+    if (this.socket !== socket || this.stopped) return;
     if (frame.s !== undefined && frame.s !== null) this.sequence = frame.s;
 
     switch (frame.op) {
       case 0:
         if (frame.t === "READY") this.sessionId = frame.d?.session_id || this.sessionId;
-        await this.onEvent(frame.t, frame.d);
+        void Promise.resolve()
+          .then(() => this.onEvent(frame.t, frame.d))
+          .catch((error) => this.reportError(error));
         break;
       case 7:
-        this.socket?.close();
+        socket.close();
         break;
       case 9:
         this.reportError(new Error("QQ Gateway rejected the session; reconnecting"));
@@ -100,8 +108,8 @@ export class QQGateway {
               shard: [0, 1],
               properties: {
                 "$os": "linux",
-              "$browser": "qq-llm-agent",
-              "$device": "qq-llm-agent",
+                "$browser": "qq-llm-agent",
+                "$device": "qq-llm-agent",
               },
             },
           });

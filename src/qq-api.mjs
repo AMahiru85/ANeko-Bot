@@ -1,4 +1,3 @@
-const TOKEN_URL = "https://api.bot.qq.com/app/getAppAccessToken";
 export class QQApi {
   constructor({ appId, clientSecret, apiBase, gatewayUrl }) {
     this.appId = appId;
@@ -7,54 +6,57 @@ export class QQApi {
     this.gatewayUrl = gatewayUrl;
     this.token = null;
     this.tokenExpiresAt = 0;
+    this.tokenPromise = null;
   }
 
   async getAccessToken() {
     if (this.token && Date.now() < this.tokenExpiresAt) return this.token;
+    if (this.tokenPromise) return this.tokenPromise;
 
-    const response = await fetch(TOKEN_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        appId: this.appId,
-        clientSecret: this.clientSecret,
-      }),
-      signal: AbortSignal.timeout(15_000),
-    });
+    this.tokenPromise = (async () => {
+      const response = await fetch(`${this.apiBase}/app/getAppAccessToken`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appId: this.appId, clientSecret: this.clientSecret }),
+        signal: AbortSignal.timeout(15_000),
+      });
 
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok || !body.access_token) {
-      throw new Error(`QQ token request failed (${response.status}): ${JSON.stringify(body)}`);
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok || !body.access_token) {
+        throw new Error(`QQ token request failed (${response.status}): ${JSON.stringify(body)}`);
+      }
+
+      this.token = body.access_token;
+      const expiresIn = Number(body.expires_in) || 7_200;
+      this.tokenExpiresAt = Date.now() + Math.max(60, expiresIn - 300) * 1_000;
+      return this.token;
+    })();
+
+    try {
+      return await this.tokenPromise;
+    } finally {
+      this.tokenPromise = null;
     }
-
-    this.token = body.access_token;
-    const expiresIn = Number(body.expires_in) || 7_200;
-    this.tokenExpiresAt = Date.now() + Math.max(60, expiresIn - 300) * 1_000;
-    return this.token;
   }
 
   async request(path, options = {}) {
-    const token = await this.getAccessToken();
-    const headers = new Headers(options.headers || {});
-    headers.set("Authorization", `QQBot ${token}`);
-    if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-
-    let response = await fetch(`${this.apiBase}${path}`, {
-      ...options,
-      headers,
-      signal: options.signal || AbortSignal.timeout(15_000),
-    });
-
-    if (response.status === 401) {
-      this.token = null;
-      this.tokenExpiresAt = 0;
-      const retryToken = await this.getAccessToken();
-      headers.set("Authorization", `QQBot ${retryToken}`);
-      response = await fetch(`${this.apiBase}${path}`, {
+    const send = async (token) => {
+      const headers = new Headers(options.headers || {});
+      headers.set("Authorization", `QQBot ${token}`);
+      if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+      return fetch(`${this.apiBase}${path}`, {
         ...options,
         headers,
         signal: options.signal || AbortSignal.timeout(15_000),
       });
+    };
+
+    let response = await send(await this.getAccessToken());
+
+    if (response.status === 401) {
+      this.token = null;
+      this.tokenExpiresAt = 0;
+      response = await send(await this.getAccessToken());
     }
 
     return response;
@@ -89,7 +91,4 @@ export class QQApi {
     return body;
   }
 
-  async getGatewayToken() {
-    return this.getAccessToken();
-  }
 }

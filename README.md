@@ -45,7 +45,7 @@ QQ 官方 C2C 消息接口
 curl -fsSL https://raw.githubusercontent.com/AMahiru85/ANeko-Bot/main/deploy/install.sh | sudo bash
 ```
 
-进入菜单后选择“安装 ANeko-Bot”。安装向导会逐项询问 `.env.example` 中的全部变量；非必填项直接回车使用默认值，必填项需要重复输入确认。每一步输入 `:back` 可返回上一项，输入 `:cancel` 可取消本次配置。
+可选项留空则使用默认值，必填项需重复输入确认。输入 :back 返回上一项，输入 :cancel 取消本次配置。
 
 ### 手动部署
 
@@ -119,7 +119,7 @@ curl http://127.0.0.1:3000/health
 {"ok":true,"service":"qq-llm-agent"}
 ```
 
-服务器不需要开放公网端口，可访问 QQ 官方 API、Gateway 和 LLM 服务商的 HTTPS/WSS 地址即可。
+服务器无需开放公网端口，可正常连接 QQ 官方 API、Gateway 和 LLM 服务商的 HTTPS/WSS 地址即可。
 
 ## 环境变量
 
@@ -133,12 +133,10 @@ curl http://127.0.0.1:3000/health
 | `LLM_API_KEY` | 是 | - | LLM 服务商 API Key |
 | `LLM_BASE_URL` | 否 | `https://api.deepseek.com` | OpenAI 兼容 API 根地址 |
 | `LLM_MODEL` | 否 | `deepseek-chat` | 模型名称 |
-| `SYSTEM_PROMPT` | 否 | 中文助手提示词 | Agent 的系统提示词 |
+| `SYSTEM_PROMPT` | 否 | 空 | Agent 的系统提示词 |
 | `HTTP_PORT` | 否 | `3000` | 本机健康检查端口 |
 
 默认配置使用 DeepSeek 作为示例。切换到其他 OpenAI 兼容服务时，只需要修改 `LLM_API_KEY`、`LLM_BASE_URL` 和 `LLM_MODEL`。
-
-服务不会主动截断对话历史；历史记录保存在进程内存中，重启服务后清空。
 
 示例：
 
@@ -150,7 +148,7 @@ QQ_INTENTS=33554432
 LLM_API_KEY=your-llm-api-key
 LLM_BASE_URL=https://api.deepseek.com
 LLM_MODEL=deepseek-chat
-SYSTEM_PROMPT=你是一个可靠、简洁的 QQ 私聊助手。请用中文回答，无法确定时明确说明。
+SYSTEM_PROMPT=
 HTTP_PORT=3000
 ```
 

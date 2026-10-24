@@ -34,9 +34,12 @@ function wasProcessed(messageId) {
 }
 
 function markProcessed(messageId) {
-  processedMessages.set(messageId, Date.now());
+  const now = Date.now();
+  processedMessages.set(messageId, now);
+  if (processedMessages.size < 10_000) return;
+
   for (const [id, timestamp] of processedMessages) {
-    if (Date.now() - timestamp > PROCESSED_MESSAGE_TTL) processedMessages.delete(id);
+    if (now - timestamp > PROCESSED_MESSAGE_TTL) processedMessages.delete(id);
   }
   while (processedMessages.size > 10_000) {
     processedMessages.delete(processedMessages.keys().next().value);
@@ -49,7 +52,7 @@ function enqueue(userId, task) {
   userQueues.set(userId, current);
   void current.finally(() => {
     if (userQueues.get(userId) === current) userQueues.delete(userId);
-  });
+  }).catch(() => {});
   return current;
 }
 
@@ -72,16 +75,17 @@ async function handleEvent(type, data) {
       return;
     }
 
-    const history = memory.get(userId);
-    history.push({ role: "user", content: text });
+    const userMessage = { role: "user", content: text };
+    memory.append(userId, userMessage);
 
     try {
-      const answer = await llm.chat(history);
-      memory.append(userId, { role: "user", content: text }, { role: "assistant", content: answer });
+      const answer = await llm.chat(memory.get(userId));
+      memory.append(userId, { role: "assistant", content: answer });
       await qqApi.sendC2CMessage(userId, answer, messageId);
       markProcessed(messageId);
       console.log(`[C2C] ${userId}: ${text.slice(0, 80)} -> ${answer.slice(0, 80)}`);
     } catch (error) {
+      memory.removeLast(userId, userMessage);
       console.error(`[C2C] failed for ${userId}:`, error);
       await qqApi.sendC2CMessage(userId, "服务暂时繁忙，请稍后再试。", messageId).catch((replyError) => {
         console.error("[C2C] failed to send error reply:", replyError);

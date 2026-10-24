@@ -42,10 +42,14 @@ export const config = {
   llmApiKey: required("LLM_API_KEY"),
   llmBaseUrl: process.env.LLM_BASE_URL?.trim() || "https://api.deepseek.com",
   llmModel: process.env.LLM_MODEL?.trim() || "deepseek-chat",
-  systemPrompt: process.env.SYSTEM_PROMPT?.trim() || "你是一个可靠、简洁的 QQ 私聊助手。请用中文回答，无法确定时明确说明。",
+  systemPrompt: process.env.SYSTEM_PROMPT?.trim() || "",
   httpPort: Number.parseInt(process.env.HTTP_PORT || "3000", 10),
 };
 
 if (!Number.isInteger(config.qqIntents) || config.qqIntents <= 0) {
   throw new Error("QQ_INTENTS must be a positive integer");
+}
+
+if (!Number.isInteger(config.httpPort) || config.httpPort < 1 || config.httpPort > 65_535) {
+  throw new Error("HTTP_PORT must be an integer between 1 and 65535");
 }
