@@ -32,14 +32,8 @@ function required(name) {
   return value;
 }
 
-function parseModelList(value, fallback) {
-  const models = [fallback, ...(value || "").split(",")]
-    .map((model) => model.trim())
-    .filter((model) => /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/.test(model));
-  return [...new Set(models.length ? models : [fallback])].slice(0, 20);
-}
-
-const llmModel = process.env.LLM_MODEL?.trim() || "deepseek-chat";
+const llmModel = required("LLM_MODEL");
+const llmBaseUrl = required("LLM_BASE_URL");
 
 export const config = {
   rootDir,
@@ -49,9 +43,8 @@ export const config = {
   qqGatewayUrl: process.env.QQ_GATEWAY_URL?.trim() || "",
   qqIntents: Number.parseInt(process.env.QQ_INTENTS || "33554432", 10),
   llmApiKey: required("LLM_API_KEY"),
-  llmBaseUrl: process.env.LLM_BASE_URL?.trim() || "https://api.deepseek.com",
+  llmBaseUrl,
   llmModel,
-  llmModels: parseModelList(process.env.LLM_MODELS, llmModel),
   llmReasoningEffort: process.env.LLM_REASONING_EFFORT?.trim().toLowerCase() || "none",
   systemPrompt: process.env.SYSTEM_PROMPT?.trim() || "",
   httpPort: Number.parseInt(process.env.HTTP_PORT || "3000", 10),

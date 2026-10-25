@@ -10,9 +10,9 @@
 | LLM 设置 | 支持 OpenAI 兼容接口 |
 | 会话记忆 | 按用户保存当前进程内的完整对话，进程重启后清空 |
 | 消息去重 | 防止 QQ 重复推送导致重复调用和回复 |
-| 动态模型设置 | 通过 Markdown 切换全局模型和思考等级 |
+| 动态思考等级设置 | 通过 Markdown 按钮切换思考等级，模型由环境变量固定 |
 | Gateway 保活 | 自动心跳、断线重连和 Session Resume |
-| 管理命令 | 发送 `/settings` 打开 Markdown 按钮菜单，`/reset` 清空当前用户上下文 |
+| 管理命令 | 发送 `/settings` 打开菜单，`/reset` 清空当前用户上下文 |
 | 健康检查 | 提供 `/health` 接口 |
 
 ## 工作流程
@@ -46,7 +46,7 @@ QQ C2C 消息接口
 curl -fsSL https://raw.githubusercontent.com/AMahiru85/ANeko-Bot/main/deploy/install.sh | sudo bash
 ```
 
-可选项留空则使用默认值，必填项需重复输入确认。输入 :back 返回上一项，输入 :cancel 取消本次配置。
+首次安装时可选项留空则使用默认值，必填项需重复输入确认。更新配置时已有值留空可保留原设置，未设置的可选项留空则使用默认值。输入 :back 返回上一项，输入 :cancel 取消本次配置。
 
 ### 手动部署
 
@@ -122,11 +122,11 @@ curl http://127.0.0.1:3000/health
 
 服务器无需开放公网端口，可正常连接 QQ 官方 API、Gateway 和 LLM 服务商的 HTTPS/WSS 地址即可。
 
-### 模型设置
+### 思考等级设置
 
 | 命令 | 作用 |
 | --- | --- |
-| `/settings` | 打开 Markdown 模型和思考等级选择菜单 |
+| `/settings` | 打开 Markdown 思考等级选择菜单 |
 | `/reset` | 清空当前用户的私聊上下文 |
 
 ## 环境变量
@@ -137,16 +137,13 @@ curl http://127.0.0.1:3000/health
 | `QQ_CLIENT_SECRET` | 是 | - | QQ 机器人 AppSecret |
 | `QQ_API_BASE` | 否 | `https://api.bot.qq.com` | QQ OpenAPI 地址 |
 | `QQ_GATEWAY_URL` | 否 | 自动获取 | 自定义 Gateway 地址 |
-| `QQ_INTENTS` | 否 | `33554432` | Gateway Identify 位掩码；程序会自动附加按钮互动 Intent |
+| `QQ_INTENTS` | 否 | `33554432` | Gateway Identify 位掩码 |
 | `LLM_API_KEY` | 是 | - | LLM 服务商 API Key |
-| `LLM_BASE_URL` | 否 | `https://api.deepseek.com` | OpenAI 兼容 API 根地址 |
-| `LLM_MODEL` | 否 | `deepseek-chat` | 模型名称 |
-| `LLM_MODELS` | 否 | 空 | 逗号分隔的模型选择列表，前 12 个显示在 Markdown 菜单中；留空时只显示 `LLM_MODEL` |
+| `LLM_BASE_URL` | 是 | - | OpenAI 兼容 LLM API 根地址 |
+| `LLM_MODEL` | 是 | - | LLM 模型名称 |
 | `LLM_REASONING_EFFORT` | 否 | `none` | 默认思考等级；可选 `none`、`minimal`、`low`、`medium`、`high`、`xhigh` |
 | `SYSTEM_PROMPT` | 否 | 空 | Agent 的系统提示词 |
 | `HTTP_PORT` | 否 | `3000` | 本机健康检查端口 |
-
-默认配置使用 DeepSeek 作为示例。切换到其他 OpenAI 兼容服务时，修改 `LLM_API_KEY`、`LLM_BASE_URL` 和 `LLM_MODEL`，并可通过 `LLM_MODELS` 配置 Markdown 菜单中的候选模型。
 
 示例：
 
@@ -157,8 +154,7 @@ QQ_INTENTS=33554432
 
 LLM_API_KEY=your-llm-api-key
 LLM_BASE_URL=https://api.deepseek.com
-LLM_MODEL=deepseek-chat
-LLM_MODELS=deepseek-chat,deepseek-reasoner
+LLM_MODEL=your-model-name
 LLM_REASONING_EFFORT=none
 SYSTEM_PROMPT=
 HTTP_PORT=3000

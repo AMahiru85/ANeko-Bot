@@ -81,23 +81,37 @@ read_tty() {
 }
 
 configure_env() {
-  local -a keys=(QQ_APP_ID QQ_CLIENT_SECRET QQ_API_BASE QQ_GATEWAY_URL QQ_INTENTS LLM_API_KEY LLM_BASE_URL LLM_MODEL LLM_MODELS LLM_REASONING_EFFORT SYSTEM_PROMPT HTTP_PORT)
-  local -a required=(1 1 0 0 0 1 0 0 0 0 0 0)
+  local preserve_existing="${1:-0}"
+  local -a keys=(QQ_APP_ID QQ_CLIENT_SECRET QQ_API_BASE QQ_GATEWAY_URL QQ_INTENTS LLM_API_KEY LLM_BASE_URL LLM_MODEL LLM_REASONING_EFFORT SYSTEM_PROMPT HTTP_PORT)
+  local -a required=(1 1 0 0 0 1 1 1 0 0 0)
   local -a values=()
-  local i=0 key default value confirm prompt tmp
+  local i=0 key default value confirm prompt tmp kept_existing
 
   CONFIG_CANCELLED=0
   log "配置环境变量..."
-  log '可选项留空则使用默认值。输入 `:back` 返回上一项，输入 `:cancel` 取消本次配置。'
+  if [[ "${preserve_existing}" == 1 ]]; then
+    log '已有值留空则保持原设置；空值项目留空则使用默认值。输入 `:back` 返回上一项，输入 `:cancel` 取消本次配置。'
+  else
+    log '可选项留空则使用默认值。输入 `:back` 返回上一项，输入 `:cancel` 取消本次配置。'
+  fi
   while ((i < ${#keys[@]})); do
     key="${keys[i]}"
     default="$(env_get "${key}")"
+    kept_existing=0
     if [[ "${required[i]}" == 1 ]]; then
-      prompt="${key}（必填，:back 返回，:cancel 取消）： "
+      if [[ "${preserve_existing}" == 1 && -n "${default}" ]]; then
+        prompt="${key}（回车保留当前值，:back 返回，:cancel 取消）： "
+      else
+        prompt="${key}（必填，:back 返回，:cancel 取消）： "
+      fi
     elif [[ -n "${default}" ]]; then
-      prompt="${key}（回车使用默认值 ${default}，:back 返回）： "
+      if [[ "${preserve_existing}" == 1 ]]; then
+        prompt="${key}（回车保留当前值，:back 返回，:cancel 取消）： "
+      else
+        prompt="${key}（回车使用默认值 ${default}，:back 返回）： "
+      fi
     else
-      prompt="${key}（回车留空，:back 返回）： "
+      prompt="${key}（回车留空，:back 返回，:cancel 取消）： "
     fi
 
     read_tty "${prompt}"
@@ -106,13 +120,19 @@ configure_env() {
       :cancel) CONFIG_CANCELLED=1; log "已取消配置。"; return 0 ;;
       :back) if ((i > 0)); then i=$((i - 1)); else log "已经是第一项。"; fi; continue ;;
     esac
-    if [[ "${required[i]}" == 1 && -z "${value}" ]]; then
-      log "${key} 不能为空。"
-      continue
+    if [[ -z "${value}" ]]; then
+      if [[ "${preserve_existing}" == 1 && -n "${default}" ]]; then
+        value="${default}"
+        kept_existing=1
+      elif [[ "${required[i]}" == 1 ]]; then
+        log "${key} 不能为空。"
+        continue
+      else
+        value="${default}"
+      fi
     fi
-    [[ "${required[i]}" == 1 || -n "${value}" ]] || value="${default}"
 
-    if [[ "${required[i]}" == 1 ]]; then
+    if [[ "${required[i]}" == 1 && "${kept_existing}" == 0 ]]; then
       read_tty "再次输入 ${key} 确认（:back 返回）： "
       confirm="${REPLY}"
       case "${confirm}" in
@@ -142,14 +162,14 @@ ensure_env() {
     cp "${INSTALL_DIR}/.env.example" "${INSTALL_DIR}/.env"
     new=1
   fi
-  if ((new)) && [[ -r /dev/tty ]]; then configure_env; fi
+  if ((new)) && [[ -r /dev/tty ]]; then configure_env 0; fi
   chown "${RUN_USER}:${RUN_USER}" "${INSTALL_DIR}/.env"
   chmod 600 "${INSTALL_DIR}/.env"
 }
 
 valid_env() {
   local key missing=()
-  for key in QQ_APP_ID QQ_CLIENT_SECRET LLM_API_KEY; do
+  for key in QQ_APP_ID QQ_CLIENT_SECRET LLM_API_KEY LLM_BASE_URL LLM_MODEL; do
     [[ -n "$(env_get "${key}")" ]] || missing+=("${key}")
   done
   if ((${#missing[@]})); then
@@ -199,7 +219,7 @@ config_bot() {
   [[ -d "${INSTALL_DIR}" ]] || die "尚未安装 ANeko-Bot。"
   ensure_user
   [[ -f "${INSTALL_DIR}/.env" ]] || cp "${INSTALL_DIR}/.env.example" "${INSTALL_DIR}/.env"
-  configure_env
+  configure_env 1
   ((CONFIG_CANCELLED)) && return 0
   chown "${RUN_USER}:${RUN_USER}" "${INSTALL_DIR}/.env"
   chmod 600 "${INSTALL_DIR}/.env"

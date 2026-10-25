@@ -26,7 +26,6 @@ const STREAM_UPDATE_INTERVAL_MS = 100;
 const STREAM_CONTENT_LIMIT = 2_000;
 const INTERACTION_INTENT = 1 << 26;
 const EFFORT_VALUES = new Set(["none", "minimal", "low", "medium", "high", "xhigh"]);
-const MODEL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/;
 const EFFORT_LABELS = {
   none: "关闭",
   minimal: "最低",
@@ -36,7 +35,6 @@ const EFFORT_LABELS = {
   xhigh: "最高",
 };
 const runtimeSettings = {
-  model: config.llmModel,
   reasoningEffort: config.llmReasoningEffort,
 };
 
@@ -65,16 +63,7 @@ function rowsFromButtons(buttons, size = 4) {
   return rows;
 }
 
-function availableModels() {
-  return [...new Set([runtimeSettings.model, ...config.llmModels])].slice(0, 12);
-}
-
 function settingsKeyboard() {
-  const modelButtons = availableModels().map((model, index) => createSettingButton(
-    `model-${index}`,
-    model.length <= 10 ? model : `模型 ${index + 1}`,
-    `model:${model}`,
-  ));
   const effortButtons = [...EFFORT_VALUES].map((effort) => createSettingButton(
     `effort-${effort}`,
     EFFORT_LABELS[effort],
@@ -82,15 +71,15 @@ function settingsKeyboard() {
   ));
   return {
     content: {
-      rows: [...rowsFromButtons(modelButtons), ...rowsFromButtons(effortButtons)],
+      rows: rowsFromButtons(effortButtons, 3),
     },
   };
 }
 
 function settingsMarkdown(prefix = "") {
-  const modelList = availableModels().map((model, index) => `${index + 1}. \`${model}\``).join("\n");
   const heading = prefix ? `${prefix}\n\n` : "";
-  return `${heading}# LLM 设置\n\n**当前模型：** \`${runtimeSettings.model}\`\n\n**当前思考等级：** ${EFFORT_LABELS[runtimeSettings.reasoningEffort] || runtimeSettings.reasoningEffort}\n\n**可选模型：**\n${modelList}\n\n点击下方按钮即可应用设置。`;
+  const effortLabel = EFFORT_LABELS[runtimeSettings.reasoningEffort] || runtimeSettings.reasoningEffort;
+  return `${heading}# LLM 设置\n\n> **当前模型**  \`${config.llmModel}\`\n> 由环境变量 \`LLM_MODEL\` 控制\n\n> **当前思考等级**  **${effortLabel}**\n\n## 思考等级\n选择一个按钮应用到后续对话。`;
 }
 
 async function sendSettingsMenu(userId, options = {}) {
@@ -111,16 +100,8 @@ async function handleInteraction(data) {
 
   const buttonData = data.data?.resolved?.button_data || data.data?.button_data || "";
   return enqueue(userId, async () => {
-    let prefix = "按钮操作未识别。";
-    if (buttonData.startsWith("model:")) {
-      const model = buttonData.slice("model:".length);
-      if (model && MODEL_NAME_PATTERN.test(model) && availableModels().includes(model)) {
-        runtimeSettings.model = model;
-        prefix = `已切换全局模型：\`${model}\``;
-      } else {
-        prefix = "模型选项已失效，请重新打开设置菜单。";
-      }
-    } else if (buttonData.startsWith("effort:")) {
+    let prefix = "按钮操作未识别，请重新打开设置菜单。";
+    if (buttonData.startsWith("effort:")) {
       const effort = buttonData.slice("effort:".length).toLowerCase();
       if (EFFORT_VALUES.has(effort)) {
         runtimeSettings.reasoningEffort = effort;
