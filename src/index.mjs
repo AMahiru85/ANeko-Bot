@@ -35,7 +35,10 @@ const EFFORT_LABELS = {
   high: "高",
   xhigh: "最高",
 };
+const MODEL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/;
+const MAX_MODEL_BUTTONS = 12;
 const runtimeSettings = {
+  model: config.llmModel,
   reasoningEffort: config.llmReasoningEffort,
 };
 
@@ -64,7 +67,15 @@ function rowsFromButtons(buttons, size = 4) {
   return rows;
 }
 
-function settingsKeyboard() {
+function modelIds(payload) {
+  const models = Array.isArray(payload?.data) ? payload.data : [];
+  return [...new Set(models
+    .map((model) => String(model?.id || "").trim())
+    .filter((model) => MODEL_NAME_PATTERN.test(model)))]
+    .slice(0, MAX_MODEL_BUTTONS);
+}
+
+function settingsKeyboard({ models = [] } = {}) {
   const effortButtons = [...EFFORT_VALUES].map((effort) => createSettingButton(
     `effort-${effort}`,
     EFFORT_LABELS[effort],
@@ -72,17 +83,20 @@ function settingsKeyboard() {
   ));
   const rows = rowsFromButtons(effortButtons, 3);
   if (config.aiProvider === "deepseek") {
-    rows.push(...rowsFromButtons([
-      createSettingButton("deepseek-models", "模型列表", "deepseek-command:/models"),
-      createSettingButton("deepseek-balance", "查询余额", "deepseek-command:/balance"),
-      createSettingButton("deepseek-files", "文件列表", "deepseek-command:/files"),
-      createSettingButton("deepseek-search", "网页搜索", "deepseek-command:hint-search"),
-      createSettingButton("deepseek-fetch", "网页抓取", "deepseek-command:hint-fetch"),
-    ], 3));
+    rows.push({
+      buttons: [createSettingButton("deepseek-select-model", "选择模型", "deepseek-command:/models")],
+    });
+    if (models.length) {
+      rows.push(...rowsFromButtons(models.map((model, index) => createSettingButton(
+        `deepseek-model-${index}`,
+        model.length <= 10 ? model : `模型 ${index + 1}`,
+        `model:${model}`,
+      )), 3));
+    }
+    rows.push({
+      buttons: [createSettingButton("deepseek-balance", "查询余额", "deepseek-command:/balance")],
+    });
   }
-  rows.push({
-    buttons: [createSettingButton("settings-reset", "清空会话", "settings-command:reset")],
-  });
   return {
     content: {
       rows,
@@ -93,29 +107,30 @@ function settingsKeyboard() {
 function settingsMarkdown(prefix = "") {
   const heading = prefix ? `${prefix}\n\n` : "";
   const effortLabel = EFFORT_LABELS[runtimeSettings.reasoningEffort] || runtimeSettings.reasoningEffort;
-  const modelVariable = config.aiProvider === "deepseek" ? "DEEPSEEK_MODEL" : "OTHER_AI_MODEL";
   const sections = [
     "# LLM 设置",
-    `> **服务商**  \`${config.aiProvider}\``,
-    `> **当前模型**  \`${config.llmModel}\``,
-    `> 由环境变量 \`${modelVariable}\` 控制`,
     "",
     "## 模型参数",
     `当前思考等级：**${effortLabel}**`,
+    `当前模型：**${runtimeSettings.model}**`,
   ];
   if (config.aiProvider === "deepseek") {
     sections.push(
       "",
-      "## DeepSeek 工具",
-      "模型、账户、文件与网页能力",
+      "## 工具",
+      "查询余额",
     );
   }
-  sections.push("", "## 会话操作", "清空当前私聊上下文");
   return `${heading}${sections.join("\n")}`;
 }
 
+function settingsStatus() {
+  const effortLabel = EFFORT_LABELS[runtimeSettings.reasoningEffort] || runtimeSettings.reasoningEffort;
+  return `当前思考等级：${effortLabel}\n当前模型：${runtimeSettings.model}`;
+}
+
 async function sendSettingsMenu(userId, options = {}) {
-  return qqApi.sendC2CMarkdown(userId, settingsMarkdown(options.prefix), settingsKeyboard(), options);
+  return qqApi.sendC2CMarkdown(userId, settingsMarkdown(options.prefix), settingsKeyboard(options), options);
 }
 
 async function handleInteraction(data) {
@@ -131,19 +146,26 @@ async function handleInteraction(data) {
   markProcessed(interactionId);
 
   const buttonData = data.data?.resolved?.button_data || data.data?.button_data || "";
+  const callbackMessageId = data.message?.id || data.message_id || data.msg_id;
   return enqueue(userId, async () => {
     let prefix = "按钮操作未识别，请重新打开设置菜单。";
+    let models = [];
+    if (config.aiProvider === "deepseek" && buttonData.startsWith("model:")) {
+      const model = buttonData.slice("model:".length).trim();
+      if (MODEL_NAME_PATTERN.test(model)) {
+        runtimeSettings.model = model;
+        prefix = `已切换当前模型：**${model}**`;
+      } else {
+        prefix = "模型选项已失效，请重新打开设置菜单。";
+      }
+    }
+
     if (buttonData.startsWith("effort:")) {
       const effort = buttonData.slice("effort:".length).toLowerCase();
       if (EFFORT_VALUES.has(effort)) {
         runtimeSettings.reasoningEffort = effort;
         prefix = `已设置全局思考等级：**${EFFORT_LABELS[effort]}**`;
       }
-    }
-
-    if (buttonData === "settings-command:reset") {
-      memory.clear(userId);
-      prefix = "已清空当前私聊上下文。";
     }
 
     if (config.aiProvider === "deepseek" && buttonData.startsWith("deepseek-command:")) {
@@ -153,6 +175,10 @@ async function handleInteraction(data) {
           prefix = "请发送 `/search 关键词` 执行网页搜索。";
         } else if (command === "hint-fetch") {
           prefix = "请发送 `/fetch https://...` 抓取网页。";
+        } else if (command === "/models") {
+          const payload = await llm.listModels();
+          models = modelIds(payload);
+          prefix = formatModels(payload);
         } else {
           const result = await executeDeepSeekCommand(command);
           prefix = result ? result.slice(0, 900) : "命令未识别，请重新打开设置菜单。";
@@ -162,7 +188,10 @@ async function handleInteraction(data) {
       }
     }
 
-    await sendSettingsMenu(userId, { eventId: interactionId, prefix }).catch((error) => {
+    await qqApi.sendC2CMessage(userId, settingsStatus(), callbackMessageId).catch((error) => {
+      console.error("[C2C] failed to send settings status:", error);
+    });
+    await sendSettingsMenu(userId, { eventId: interactionId, prefix, models }).catch((error) => {
       console.error("[C2C] failed to send settings menu:", error);
     });
   });
@@ -350,7 +379,7 @@ async function handleEvent(type, data) {
 
     if (/^\/reset$/i.test(text)) {
       memory.clear(userId);
-      await qqApi.sendC2CMessage(userId, "已清空当前私聊上下文。", messageId);
+      await qqApi.sendC2CMessage(userId, "已清空当前上下文", messageId);
       markProcessed(messageId);
       return;
     }
