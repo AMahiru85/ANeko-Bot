@@ -251,6 +251,10 @@ async function handleInteraction(data) {
       return;
     }
 
+    const menuRefreshRequired = !buttonData.startsWith("effort:")
+      && buttonData !== "deepseek-command:/balance";
+    if (!menuRefreshRequired) return;
+
     await sendSettingsMenu(userId, { prefix, models }).catch((error) => {
       console.error("[C2C] failed to send settings menu:", error);
     });
