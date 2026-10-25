@@ -228,7 +228,18 @@ install_bot() {
 
 upgrade_bot() {
   command -v git >/dev/null || die "未找到 Git，请先安装。"
-  upgrade_project; ensure_user; chown -R "${RUN_USER}:${RUN_USER}" "${INSTALL_DIR}"; ensure_env
+  if [[ "${ANEKO_UPGRADE_HANDOFF:-0}" == 1 ]]; then
+    unset ANEKO_UPGRADE_HANDOFF
+  else
+    upgrade_project
+    local installed_script="${INSTALL_DIR}/deploy/install.sh"
+    if [[ -f "${installed_script}" ]]; then
+      log "部署脚本已更新，切换到最新版继续升级..."
+      export ANEKO_UPGRADE_HANDOFF=1
+      exec bash "${installed_script}" --upgrade
+    fi
+  fi
+  ensure_user; chown -R "${RUN_USER}:${RUN_USER}" "${INSTALL_DIR}"; ensure_env
   if ! valid_env; then log "配置不完整，服务没有重启。"; return 0; fi
   install_unit; start_service; log "升级完成。"
 }
