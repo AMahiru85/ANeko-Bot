@@ -138,8 +138,6 @@ DeepSeek 模式下打开 `/settings` 会显示模型、余额、文件、网页�
 | `/search 关键词` | 调用 DeepSeek Search API |
 | `/fetch https://...` | 调用 DeepSeek Fetch API 抓取网页 Markdown |
 
-DeepSeek 普通对话使用 QQ 流式回复；客户端保留 Tool Calls 支持，网页搜索和抓取通过设置菜单按钮或对应命令调用。
-
 ## 环境变量
 
 | 变量 | 必填 | 默认值 | 说明 |
