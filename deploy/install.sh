@@ -80,12 +80,29 @@ read_tty() {
   IFS= read -r REPLY < /dev/tty || true
 }
 
+env_description() {
+  case "$1" in
+    QQ_APP_ID) printf 'QQ 机器人 AppID' ;;
+    QQ_CLIENT_SECRET) printf 'QQ 机器人 AppSecret' ;;
+    QQ_API_BASE) printf 'QQ OpenAPI 地址' ;;
+    QQ_GATEWAY_URL) printf '自定义 Gateway 地址' ;;
+    QQ_INTENTS) printf 'Gateway Identify 位掩码' ;;
+    LLM_BASE_URL) printf 'OpenAI 兼容 LLM API 根地址' ;;
+    LLM_API_KEY) printf 'LLM 服务商 API Key' ;;
+    LLM_MODEL) printf 'LLM 模型名称' ;;
+    LLM_REASONING_EFFORT) printf '默认思考等级：none、minimal、low、medium、high、xhigh' ;;
+    SYSTEM_PROMPT) printf 'Agent 的系统提示词' ;;
+    HTTP_PORT) printf '本机健康检查端口' ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
 configure_env() {
   local preserve_existing="${1:-0}"
-  local -a keys=(QQ_APP_ID QQ_CLIENT_SECRET QQ_API_BASE QQ_GATEWAY_URL QQ_INTENTS LLM_API_KEY LLM_BASE_URL LLM_MODEL LLM_REASONING_EFFORT SYSTEM_PROMPT HTTP_PORT)
+  local -a keys=(QQ_APP_ID QQ_CLIENT_SECRET QQ_API_BASE QQ_GATEWAY_URL QQ_INTENTS LLM_BASE_URL LLM_API_KEY LLM_MODEL LLM_REASONING_EFFORT SYSTEM_PROMPT HTTP_PORT)
   local -a required=(1 1 0 0 0 1 1 1 0 0 0)
   local -a values=()
-  local i=0 key default value confirm prompt tmp kept_existing
+  local i=0 key description default value confirm prompt tmp kept_existing
 
   CONFIG_CANCELLED=0
   log "配置环境变量..."
@@ -96,22 +113,23 @@ configure_env() {
   fi
   while ((i < ${#keys[@]})); do
     key="${keys[i]}"
+    description="$(env_description "${key}")"
     default="$(env_get "${key}")"
     kept_existing=0
     if [[ "${required[i]}" == 1 ]]; then
       if [[ "${preserve_existing}" == 1 && -n "${default}" ]]; then
-        prompt="${key}（回车保留当前值，:back 返回，:cancel 取消）： "
+        prompt="${key}（${description}，回车保留当前值，:back 返回，:cancel 取消）： "
       else
-        prompt="${key}（必填，:back 返回，:cancel 取消）： "
+        prompt="${key}（${description}，必填，:back 返回，:cancel 取消）： "
       fi
     elif [[ -n "${default}" ]]; then
       if [[ "${preserve_existing}" == 1 ]]; then
-        prompt="${key}（回车保留当前值，:back 返回，:cancel 取消）： "
+        prompt="${key}（${description}，回车保留当前值，:back 返回，:cancel 取消）： "
       else
-        prompt="${key}（回车使用默认值 ${default}，:back 返回）： "
+        prompt="${key}（${description}，回车使用默认值 ${default}，:back 返回）： "
       fi
     else
-      prompt="${key}（回车留空，:back 返回，:cancel 取消）： "
+      prompt="${key}（${description}，回车留空，:back 返回，:cancel 取消）： "
     fi
 
     read_tty "${prompt}"
@@ -133,7 +151,7 @@ configure_env() {
     fi
 
     if [[ "${required[i]}" == 1 && "${kept_existing}" == 0 ]]; then
-      read_tty "再次输入 ${key} 确认（:back 返回）： "
+      read_tty "再次输入 ${key}（${description}）确认（:back 返回）： "
       confirm="${REPLY}"
       case "${confirm}" in
         :cancel) CONFIG_CANCELLED=1; log "已取消配置。"; return 0 ;;
@@ -169,7 +187,7 @@ ensure_env() {
 
 valid_env() {
   local key missing=()
-  for key in QQ_APP_ID QQ_CLIENT_SECRET LLM_API_KEY LLM_BASE_URL LLM_MODEL; do
+  for key in QQ_APP_ID QQ_CLIENT_SECRET LLM_BASE_URL LLM_API_KEY LLM_MODEL; do
     [[ -n "$(env_get "${key}")" ]] || missing+=("${key}")
   done
   if ((${#missing[@]})); then

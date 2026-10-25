@@ -46,7 +46,7 @@ QQ C2C 消息接口
 curl -fsSL https://raw.githubusercontent.com/AMahiru85/ANeko-Bot/main/deploy/install.sh | sudo bash
 ```
 
-首次安装时可选项留空则使用默认值，必填项需重复输入确认。更新配置时已有值留空可保留原设置，未设置的可选项留空则使用默认值。输入 :back 返回上一项，输入 :cancel 取消本次配置。
+安装和更新配置会按以下顺序逐项询问，并显示环境变量表中的中文说明：`QQ_APP_ID`、`QQ_CLIENT_SECRET`、`QQ_API_BASE`、`QQ_GATEWAY_URL`、`QQ_INTENTS`、`LLM_BASE_URL`、`LLM_API_KEY`、`LLM_MODEL`、`LLM_REASONING_EFFORT`、`SYSTEM_PROMPT`、`HTTP_PORT`。首次安装时可选项留空则使用默认值，必填项需重复输入确认。更新配置时已有值留空可保留原设置，未设置的可选项留空则使用默认值。输入 `:back` 返回上一项，输入 `:cancel` 取消本次配置。
 
 ### 手动部署
 
@@ -138,8 +138,8 @@ curl http://127.0.0.1:3000/health
 | `QQ_API_BASE` | 否 | `https://api.bot.qq.com` | QQ OpenAPI 地址 |
 | `QQ_GATEWAY_URL` | 否 | 自动获取 | 自定义 Gateway 地址 |
 | `QQ_INTENTS` | 否 | `33554432` | Gateway Identify 位掩码 |
-| `LLM_API_KEY` | 是 | - | LLM 服务商 API Key |
 | `LLM_BASE_URL` | 是 | - | OpenAI 兼容 LLM API 根地址 |
+| `LLM_API_KEY` | 是 | - | LLM 服务商 API Key |
 | `LLM_MODEL` | 是 | - | LLM 模型名称 |
 | `LLM_REASONING_EFFORT` | 否 | `none` | 默认思考等级；可选 `none`、`minimal`、`low`、`medium`、`high`、`xhigh` |
 | `SYSTEM_PROMPT` | 否 | 空 | Agent 的系统提示词 |
@@ -152,8 +152,8 @@ QQ_APP_ID=your-qq-app-id
 QQ_CLIENT_SECRET=your-qq-client-secret
 QQ_INTENTS=33554432
 
-LLM_API_KEY=your-llm-api-key
 LLM_BASE_URL=https://api.deepseek.com
+LLM_API_KEY=your-llm-api-key
 LLM_MODEL=your-model-name
 LLM_REASONING_EFFORT=none
 SYSTEM_PROMPT=
