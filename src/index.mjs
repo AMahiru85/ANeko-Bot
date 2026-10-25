@@ -178,8 +178,8 @@ async function handleInteraction(data) {
         } else if (command === "/models") {
           const payload = await llm.listModels();
           models = modelIds(payload);
-          prefix = formatModels(payload);
-          callbackMessage = prefix;
+          prefix = "请选择模型：";
+          callbackMessage = "";
         } else {
           const result = await executeDeepSeekCommand(command);
           prefix = result ? result.slice(0, 900) : "命令未识别，请重新打开设置菜单。";
@@ -191,9 +191,11 @@ async function handleInteraction(data) {
       }
     }
 
-    await qqApi.sendC2CMessage(userId, callbackMessage, callbackMessageId).catch((error) => {
-      console.error("[C2C] failed to send settings status:", error);
-    });
+    if (callbackMessage) {
+      await qqApi.sendC2CMessage(userId, callbackMessage, callbackMessageId).catch((error) => {
+        console.error("[C2C] failed to send settings status:", error);
+      });
+    }
     await sendSettingsMenu(userId, { prefix, models }).catch((error) => {
       console.error("[C2C] failed to send settings menu:", error);
     });
