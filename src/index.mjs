@@ -188,7 +188,7 @@ async function handleInteraction(data) {
     await qqApi.sendC2CMessage(userId, callbackMessage, callbackMessageId).catch((error) => {
       console.error("[C2C] failed to send settings status:", error);
     });
-    await sendSettingsMenu(userId, { eventId: interactionId, prefix, models }).catch((error) => {
+    await sendSettingsMenu(userId, { prefix, models }).catch((error) => {
       console.error("[C2C] failed to send settings menu:", error);
     });
   });
