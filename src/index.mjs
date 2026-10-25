@@ -112,12 +112,9 @@ function modelButtonLabel(model) {
 }
 
 function settingsKeyboard({ models = [] } = {}) {
-  const effortButtons = [...EFFORT_VALUES].map((effort) => createSettingButton(
-    `effort-${effort}`,
-    EFFORT_LABELS[effort],
-    `effort:${effort}`,
-  ));
-  const rows = rowsFromButtons(effortButtons, 3);
+  const rows = [{
+    buttons: [createSettingButton("settings-effort", "思考等级", "settings-command:effort")],
+  }];
   if (config.aiProvider === "deepseek") {
     rows.push({
       buttons: [createSettingButton("deepseek-select-model", "选择模型", "deepseek-command:/models")],
@@ -136,6 +133,18 @@ function settingsKeyboard({ models = [] } = {}) {
   return {
     content: {
       rows,
+    },
+  };
+}
+
+function effortSelectionKeyboard() {
+  return {
+    content: {
+      rows: rowsFromButtons([...EFFORT_VALUES].map((effort) => createSettingButton(
+        `effort-${effort}`,
+        EFFORT_LABELS[effort],
+        `effort:${effort}`,
+      )), 3),
     },
   };
 }
@@ -173,6 +182,10 @@ async function sendModelSelectionMenu(userId, models) {
   return qqApi.sendC2CMarkdown(userId, "请选择模型：", modelSelectionKeyboard(models));
 }
 
+async function sendEffortSelectionMenu(userId) {
+  return qqApi.sendC2CMarkdown(userId, "请选择思考等级：", effortSelectionKeyboard());
+}
+
 async function handleInteraction(data) {
   if (data?.type !== 11 || data.scene !== "c2c") return;
 
@@ -192,6 +205,7 @@ async function handleInteraction(data) {
     let callbackMessage = prefix;
     let models = [];
     let modelSelectionOnly = false;
+    let effortSelectionOnly = false;
     if (config.aiProvider === "deepseek" && buttonData.startsWith("model:")) {
       const model = buttonData.slice("model:".length).trim();
       if (MODEL_NAME_PATTERN.test(model)) {
@@ -202,6 +216,11 @@ async function handleInteraction(data) {
         prefix = "模型选项已失效，请重新打开设置菜单。";
         callbackMessage = prefix;
       }
+    }
+
+    if (buttonData === "settings-command:effort") {
+      effortSelectionOnly = true;
+      callbackMessage = "";
     }
 
     if (buttonData.startsWith("effort:")) {
@@ -251,8 +270,16 @@ async function handleInteraction(data) {
       return;
     }
 
+    if (effortSelectionOnly) {
+      await sendEffortSelectionMenu(userId).catch((error) => {
+        console.error("[C2C] failed to send effort selection menu:", error);
+      });
+      return;
+    }
+
     const menuRefreshRequired = !buttonData.startsWith("effort:")
-      && buttonData !== "deepseek-command:/balance";
+      && buttonData !== "deepseek-command:/balance"
+      && buttonData !== "settings-command:effort";
     if (!menuRefreshRequired) return;
 
     await sendSettingsMenu(userId, { prefix, models }).catch((error) => {
