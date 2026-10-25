@@ -135,8 +135,8 @@ curl http://127.0.0.1:3000/health
 | `/models` | 获取官方模型列表和输入模态 |
 | `/balance` | 查询账户余额 |
 | `/files` | 列出已上传的图像文件 |
-| `/search 关键词` | 调用 DeepSeek Search API |
-| `/fetch https://...` | 调用 DeepSeek Fetch API 抓取网页 Markdown |
+| `/search 关键词` 或 `搜索 关键词` | 调用 DeepSeek Search API |
+| `/fetch https://...` 或 `抓取 https://...` | 调用 DeepSeek Fetch API 抓取网页 Markdown |
 
 ## 环境变量
 

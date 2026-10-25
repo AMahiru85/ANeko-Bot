@@ -143,6 +143,139 @@ export class LlmClient {
     if (!received) throw new Error("LLM returned an empty response");
   }
 
+  async *streamWithTools(history, { tools = [], toolHandler, maxToolRounds = 4, ...options } = {}) {
+    if (!tools.length) {
+      for await (const delta of this.stream(history, options)) yield delta;
+      return;
+    }
+    if (typeof toolHandler !== "function") throw new Error("toolHandler is required when tools are enabled");
+
+    const messages = history.map((message) => ({ ...message }));
+    for (let round = 0; round < maxToolRounds; round += 1) {
+      const response = await this.request("/chat/completions", this.buildRequest(messages, {
+        ...options,
+        stream: true,
+        tools,
+        tool_choice: options.tool_choice || "auto",
+      }));
+      const contentType = (response.headers?.get?.("content-type") || "").toLowerCase();
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw responseError(response.status, body);
+      }
+
+      let content = "";
+      const toolCalls = [];
+      const addToolCall = (fragment) => {
+        const index = Number.isInteger(fragment?.index) ? fragment.index : toolCalls.length;
+        const call = toolCalls[index] || {
+          id: "",
+          type: "function",
+          function: { name: "", arguments: "" },
+        };
+        if (fragment?.id) call.id = fragment.id;
+        if (fragment?.type) call.type = fragment.type;
+        if (fragment?.function?.name) call.function.name += fragment.function.name;
+        if (typeof fragment?.function?.arguments === "string") {
+          call.function.arguments += fragment.function.arguments;
+        }
+        toolCalls[index] = call;
+      };
+
+      const consumeEvent = (event) => {
+        if (event?.error) throw responseError(response.status, event);
+        const delta = event?.choices?.[0]?.delta;
+        if (!delta) return { done: false, content: "" };
+        if (Array.isArray(delta.tool_calls)) {
+          for (const fragment of delta.tool_calls) addToolCall(fragment);
+        }
+        const text = typeof delta.content === "string" ? delta.content : "";
+        if (text) content += text;
+        return { done: false, content: text };
+      };
+
+      if (!contentType.includes("text/event-stream")) {
+        const body = await response.json().catch(() => ({}));
+        if (body?.error) throw responseError(response.status, body);
+        const message = body?.choices?.[0]?.message;
+        if (!message) throw new Error("LLM returned an empty response");
+        if (Array.isArray(message.tool_calls)) {
+          for (const call of message.tool_calls) addToolCall(call);
+        }
+        if (typeof message.content === "string" && message.content) {
+          content = message.content;
+          yield message.content;
+        }
+      } else {
+        if (!response.body) throw new Error("LLM returned an empty stream");
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let done = false;
+        const consumeLine = (line) => {
+          if (!line.startsWith("data:")) return null;
+          const payload = line.slice(5).trimStart();
+          if (payload === "[DONE]") return { done: true };
+          if (!payload) return null;
+          let event;
+          try {
+            event = JSON.parse(payload);
+          } catch (error) {
+            throw new Error(`Invalid LLM stream event: ${error.message}`);
+          }
+          return consumeEvent(event);
+        };
+
+        for await (const chunk of response.body) {
+          buffer += decoder.decode(chunk, { stream: true });
+          const lines = buffer.split(/\r?\n/);
+          buffer = lines.pop() || "";
+          for (const line of lines) {
+            const event = consumeLine(line);
+            if (!event) continue;
+            if (event.done) {
+              done = true;
+              break;
+            }
+            if (event.content) yield event.content;
+          }
+          if (done) break;
+        }
+        if (!done) {
+          buffer += decoder.decode();
+          const event = consumeLine(buffer);
+          if (event?.content) yield event.content;
+        }
+      }
+
+      if (!toolCalls.length) {
+        if (!content.trim()) throw new Error("LLM returned an empty response");
+        return;
+      }
+
+      messages.push({ role: "assistant", content: content || null, tool_calls: toolCalls });
+      for (const call of toolCalls) {
+        let args = {};
+        try {
+          args = JSON.parse(call.function?.arguments || "{}");
+        } catch (error) {
+          args = { parse_error: error.message };
+        }
+        let result;
+        try {
+          result = await toolHandler(call.function?.name, args, call);
+        } catch (error) {
+          result = { error: error.message };
+        }
+        messages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: typeof result === "string" ? result : JSON.stringify(result),
+        });
+      }
+    }
+    throw new Error("LLM exceeded the maximum tool-call rounds");
+  }
+
   async chat(history, options = {}) {
     let content = "";
     for await (const delta of this.stream(history, options)) content += delta;
