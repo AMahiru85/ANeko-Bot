@@ -1,7 +1,8 @@
 # ANeko Bot
 
 基于 Node.js 的 QQ 官方机器人 Agent。
-已对DeepSeek进行适配，其他 AI 服务商适配将逐步进行，现兼容文本对话。
+
+已对DeepSeek进行适配，其他 AI 服务商适配将逐步进行，现已兼容文本对话。
 
 ## 项目
 
