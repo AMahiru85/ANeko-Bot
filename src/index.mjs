@@ -35,6 +35,36 @@ const EFFORT_LABELS = {
   high: "高",
   xhigh: "最高",
 };
+const DEEPSEEK_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "search_web",
+      description: "Search the live web when the user asks for current information or sources.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "The web search query." },
+          count: { type: "integer", minimum: 1, maximum: 10, description: "Number of results." },
+          need_content: { type: "boolean", description: "Whether to include page content." },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "fetch_web_page",
+      description: "Fetch an HTTP or HTTPS page as Markdown after a relevant URL is known.",
+      parameters: {
+        type: "object",
+        properties: { url: { type: "string", description: "The page URL." } },
+        required: ["url"],
+      },
+    },
+  },
+];
 const MODEL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/;
 const MAX_MODEL_BUTTONS = 3;
 const runtimeSettings = {
@@ -110,6 +140,18 @@ function settingsKeyboard({ models = [] } = {}) {
   };
 }
 
+function modelSelectionKeyboard(models) {
+  return {
+    content: {
+      rows: rowsFromButtons(models.map((model, index) => createSettingButton(
+        `deepseek-model-${index}`,
+        modelButtonLabel(model),
+        `model:${model}`,
+      )), 3),
+    },
+  };
+}
+
 function settingsMarkdown(prefix = "") {
   const heading = prefix ? `${prefix}\n\n` : "";
   const effortLabel = EFFORT_LABELS[runtimeSettings.reasoningEffort] || runtimeSettings.reasoningEffort;
@@ -125,6 +167,10 @@ function settingsMarkdown(prefix = "") {
 
 async function sendSettingsMenu(userId, options = {}) {
   return qqApi.sendC2CMarkdown(userId, settingsMarkdown(options.prefix), settingsKeyboard(options), options);
+}
+
+async function sendModelSelectionMenu(userId, models) {
+  return qqApi.sendC2CMarkdown(userId, "请选择模型：", modelSelectionKeyboard(models));
 }
 
 async function handleInteraction(data) {
@@ -145,6 +191,7 @@ async function handleInteraction(data) {
     let prefix = "按钮操作未识别，请重新打开设置菜单。";
     let callbackMessage = prefix;
     let models = [];
+    let modelSelectionOnly = false;
     if (config.aiProvider === "deepseek" && buttonData.startsWith("model:")) {
       const model = buttonData.slice("model:".length).trim();
       if (MODEL_NAME_PATTERN.test(model)) {
@@ -178,7 +225,8 @@ async function handleInteraction(data) {
         } else if (command === "/models") {
           const payload = await llm.listModels();
           models = modelIds(payload);
-          prefix = "请选择模型：";
+          modelSelectionOnly = models.length > 0;
+          prefix = modelSelectionOnly ? "" : "DeepSeek 当前没有返回可用模型。";
           callbackMessage = "";
         } else {
           const result = await executeDeepSeekCommand(command);
@@ -196,6 +244,13 @@ async function handleInteraction(data) {
         console.error("[C2C] failed to send settings status:", error);
       });
     }
+    if (modelSelectionOnly) {
+      await sendModelSelectionMenu(userId, models).catch((error) => {
+        console.error("[C2C] failed to send model selection menu:", error);
+      });
+      return;
+    }
+
     await sendSettingsMenu(userId, { prefix, models }).catch((error) => {
       console.error("[C2C] failed to send settings menu:", error);
     });
@@ -304,16 +359,35 @@ async function executeDeepSeekCommand(text) {
   if (/^\/files$/i.test(text)) {
     return formatFiles(await llm.listFiles());
   }
-  const search = text.match(/^\/search\s+(.+)$/i);
+  const search = text.match(/^(?:\/search|搜索|网页搜索)\s+(.+)$/i);
   if (search) {
     return formatSearch(await llm.webSearch(search[1], { parameters: { need_content: true } }));
   }
-  const fetchMatch = text.match(/^\/fetch\s+(https?:\/\/\S+)$/i);
+  const fetchMatch = text.match(/^(?:\/fetch|抓取|网页抓取)\s+(https?:\/\/\S+)$/i);
   if (fetchMatch) {
     const page = await llm.fetchWebPage(fetchMatch[1]);
     return `${page.title || fetchMatch[1]}\n\n${page.content || "页面没有可提取内容。"}`.slice(0, STREAM_CONTENT_LIMIT);
   }
   return null;
+}
+
+async function runDeepSeekTool(name, args = {}) {
+  if (name === "search_web") {
+    if (typeof args.query !== "string" || !args.query.trim()) throw new Error("搜索关键词不能为空");
+    return llm.webSearch(args.query.trim(), {
+      parameters: {
+        ...(Number.isInteger(args.count) ? { count: args.count } : {}),
+        ...(typeof args.need_content === "boolean" ? { need_content: args.need_content } : {}),
+      },
+    });
+  }
+  if (name === "fetch_web_page") {
+    if (typeof args.url !== "string" || !/^https?:\/\/\S+$/i.test(args.url)) {
+      throw new Error("网页地址必须是 HTTP 或 HTTPS URL");
+    }
+    return llm.fetchWebPage(args.url);
+  }
+  throw new Error(`未知 DeepSeek 工具：${name}`);
 }
 
 async function handleDeepSeekCommand(userId, messageId, text) {
@@ -331,7 +405,14 @@ async function streamC2CReply(userId, messageId, history) {
   let index = 0;
 
   try {
-    for await (const delta of llm.stream(history, runtimeSettings)) {
+    const responseStream = config.aiProvider === "deepseek"
+      ? llm.streamWithTools(history, {
+        ...runtimeSettings,
+        tools: DEEPSEEK_TOOLS,
+        toolHandler: runDeepSeekTool,
+      })
+      : llm.stream(history, runtimeSettings);
+    for await (const delta of responseStream) {
       answer += delta;
       const content = answer.slice(0, STREAM_CONTENT_LIMIT);
       const shouldSend = content.trim() && content !== sentAnswer && (
