@@ -75,6 +75,12 @@ function modelIds(payload) {
     .slice(0, MAX_MODEL_BUTTONS);
 }
 
+function modelButtonLabel(model) {
+  const compact = model.replace(/^deepseek[-_:]?/i, "");
+  if (compact.length <= 10) return compact || model.slice(0, 10);
+  return `${compact.slice(0, 7)}...`;
+}
+
 function settingsKeyboard({ models = [] } = {}) {
   const effortButtons = [...EFFORT_VALUES].map((effort) => createSettingButton(
     `effort-${effort}`,
@@ -89,7 +95,7 @@ function settingsKeyboard({ models = [] } = {}) {
     if (models.length) {
       rows.push(...rowsFromButtons(models.map((model, index) => createSettingButton(
         `deepseek-model-${index}`,
-        model.length <= 10 ? model : `模型 ${index + 1}`,
+        modelButtonLabel(model),
         `model:${model}`,
       )), 3));
     }
