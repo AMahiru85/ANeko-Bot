@@ -40,13 +40,12 @@ const runtimeSettings = {
   reasoningEffort: config.llmReasoningEffort,
 };
 
-function createSettingButton(id, label, data, selected) {
+function createSettingButton(id, label, data) {
   return {
     id,
     render_data: {
       label: label.slice(0, 10),
-      visited_label: "已选择",
-      style: selected ? 1 : 0,
+      style: 0,
     },
     action: {
       type: 1,
@@ -75,13 +74,11 @@ function settingsKeyboard() {
     `model-${index}`,
     model.length <= 10 ? model : `模型 ${index + 1}`,
     `model:${model}`,
-    model === runtimeSettings.model,
   ));
   const effortButtons = [...EFFORT_VALUES].map((effort) => createSettingButton(
     `effort-${effort}`,
     EFFORT_LABELS[effort],
     `effort:${effort}`,
-    effort === runtimeSettings.reasoningEffort,
   ));
   return {
     content: {
