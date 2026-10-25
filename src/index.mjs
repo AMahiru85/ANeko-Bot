@@ -36,7 +36,7 @@ const EFFORT_LABELS = {
   xhigh: "最高",
 };
 const MODEL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/;
-const MAX_MODEL_BUTTONS = 12;
+const MAX_MODEL_BUTTONS = 3;
 const runtimeSettings = {
   model: config.llmModel,
   reasoningEffort: config.llmReasoningEffort,
@@ -114,13 +114,6 @@ function settingsMarkdown(prefix = "") {
     `当前思考等级：**${effortLabel}**`,
     `当前模型：**${runtimeSettings.model}**`,
   ];
-  if (config.aiProvider === "deepseek") {
-    sections.push(
-      "",
-      "## 工具",
-      "查询余额",
-    );
-  }
   return `${heading}${sections.join("\n")}`;
 }
 
