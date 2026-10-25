@@ -124,11 +124,6 @@ function settingsMarkdown(prefix = "") {
   return `${heading}${sections.join("\n")}`;
 }
 
-function settingsStatus() {
-  const effortLabel = EFFORT_LABELS[runtimeSettings.reasoningEffort] || runtimeSettings.reasoningEffort;
-  return `当前思考等级：${effortLabel}\n当前模型：${runtimeSettings.model}`;
-}
-
 async function sendSettingsMenu(userId, options = {}) {
   return qqApi.sendC2CMarkdown(userId, settingsMarkdown(options.prefix), settingsKeyboard(options), options);
 }
@@ -149,14 +144,17 @@ async function handleInteraction(data) {
   const callbackMessageId = data.message?.id || data.message_id || data.msg_id;
   return enqueue(userId, async () => {
     let prefix = "按钮操作未识别，请重新打开设置菜单。";
+    let callbackMessage = prefix;
     let models = [];
     if (config.aiProvider === "deepseek" && buttonData.startsWith("model:")) {
       const model = buttonData.slice("model:".length).trim();
       if (MODEL_NAME_PATTERN.test(model)) {
         runtimeSettings.model = model;
         prefix = `已切换当前模型：**${model}**`;
+        callbackMessage = `当前模型：${model}`;
       } else {
         prefix = "模型选项已失效，请重新打开设置菜单。";
+        callbackMessage = prefix;
       }
     }
 
@@ -165,6 +163,7 @@ async function handleInteraction(data) {
       if (EFFORT_VALUES.has(effort)) {
         runtimeSettings.reasoningEffort = effort;
         prefix = `已设置全局思考等级：**${EFFORT_LABELS[effort]}**`;
+        callbackMessage = `当前思考等级：${EFFORT_LABELS[effort]}`;
       }
     }
 
@@ -173,22 +172,27 @@ async function handleInteraction(data) {
       try {
         if (command === "hint-search") {
           prefix = "请发送 `/search 关键词` 执行网页搜索。";
+          callbackMessage = prefix;
         } else if (command === "hint-fetch") {
           prefix = "请发送 `/fetch https://...` 抓取网页。";
+          callbackMessage = prefix;
         } else if (command === "/models") {
           const payload = await llm.listModels();
           models = modelIds(payload);
           prefix = formatModels(payload);
+          callbackMessage = prefix;
         } else {
           const result = await executeDeepSeekCommand(command);
           prefix = result ? result.slice(0, 900) : "命令未识别，请重新打开设置菜单。";
+          callbackMessage = prefix;
         }
       } catch (error) {
         prefix = `操作失败：${error.message}`.slice(0, 900);
+        callbackMessage = prefix;
       }
     }
 
-    await qqApi.sendC2CMessage(userId, settingsStatus(), callbackMessageId).catch((error) => {
+    await qqApi.sendC2CMessage(userId, callbackMessage, callbackMessageId).catch((error) => {
       console.error("[C2C] failed to send settings status:", error);
     });
     await sendSettingsMenu(userId, { eventId: interactionId, prefix, models }).catch((error) => {
