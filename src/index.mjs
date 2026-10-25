@@ -48,7 +48,15 @@ function createSettingButton(id, label, data, selected) {
       visited_label: "已选择",
       style: selected ? 1 : 0,
     },
-    action: { type: 1, data },
+    action: {
+      type: 1,
+      permission: {
+        type: 2,
+        specify_user_ids: [],
+        specify_role_ids: [],
+      },
+      data,
+    },
   };
 }
 
@@ -220,7 +228,7 @@ async function handleEvent(type, data) {
   return enqueue(userId, async () => {
     if (wasProcessed(messageId)) return;
 
-    if (/^\/(reset|clear)$/i.test(text)) {
+    if (/^\/reset$/i.test(text)) {
       memory.clear(userId);
       await qqApi.sendC2CMessage(userId, "已清空当前私聊上下文。", messageId);
       markProcessed(messageId);

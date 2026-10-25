@@ -13,8 +13,8 @@
 | 消息去重 | 防止 QQ 重复推送导致重复调用和重复回复 |
 | 动态模型设置 | 通过 Markdown 内嵌键盘切换全局模型和思考等级 |
 | Gateway 保活 | 自动心跳、断线重连和 Session Resume |
-| 管理命令 | 发送 `/settings` 打开 Markdown 按钮菜单，`/reset` 或 `/clear` 清空当前用户上下文 |
-| 健康检查 | 提供本机 `/health` 接口 |
+| 管理命令 | 发送 `/settings` 打开 Markdown 按钮菜单，`/reset` 清空当前用户上下文 |
+| 健康检查 | 提供 `/health` 接口 |
 
 ## 工作流程
 
@@ -32,14 +32,10 @@ QQ 官方 C2C 消息接口
 用户收到回复
 ```
 
-模型响应通过 OpenAI 兼容接口的 SSE 流逐段读取，再通过 QQ 官方 [`stream_messages` 接口](https://bot.q.qq.com/wiki/develop/api-v2/autogen/api/v2_users_user_openid_stream_messages.post.html) 更新同一条 C2C 回复。QQ 端按约 100 毫秒合并一次增量，最终状态会发送完整内容。
-
 ## QQ 开放平台配置
 
 1. 在 [QQ 开放平台](https://q.qq.com/) 创建机器人。
 2. 获取 `AppID` 和 `AppSecret`。
-
-程序会自动订阅按钮互动事件，点击设置菜单中的按钮即可修改运行时模型和思考等级。
 
 ## 部署
 
@@ -127,14 +123,11 @@ curl http://127.0.0.1:3000/health
 
 服务器无需开放公网端口，可正常连接 QQ 官方 API、Gateway 和 LLM 服务商的 HTTPS/WSS 地址即可。
 
-### 运行时调节模型和思考等级
-
-向机器人发送 `/settings`，机器人会返回带按钮的 Markdown 设置菜单。点击按钮后设置立即作用于后续 LLM 请求。设置只保存在当前进程内，服务重启后恢复 `.env` 中的默认值。模型和思考等级通过菜单按钮调整。
-
+### 模型设置
 | 命令 | 作用 |
 | --- | --- |
 | `/settings` | 打开 Markdown 模型和思考等级选择菜单 |
-| `/reset` 或 `/clear` | 清空当前用户的私聊上下文 |
+| `/reset` | 清空当前用户的私聊上下文 |
 
 ## 环境变量
 
