@@ -1,13 +1,15 @@
 # ANeko Bot
 
 基于 Node.js 的 QQ 官方机器人 Agent。
+已对DeepSeek进行适配，其他 AI 服务商适配将逐步进行，现兼容文本对话。
 
 ## 项目
 
 | 能力 | 说明 |
 | --- | --- |
-| QQ 互动 | 接收消息和按钮互动事件 |
-| LLM 设置 | 支持 OpenAI 兼容接口 |
+| QQ 互动 | 接收消息和设置事件 |
+| 模型设置 | DeepSeek 专属接口适配，其他 AI 服务商的 OpenAI 格式兼容 |
+| DeepSeek 模式 | 模型列表、余额查询、图像理解、Tool Calls、Files API、网页搜索与抓取 |
 | 会话记忆 | 按用户保存当前进程内的完整对话，进程重启后清空 |
 | 消息去重 | 防止 QQ 重复推送导致重复调用和回复 |
 | 动态思考等级设置 | 通过 Markdown 按钮切换思考等级 |
@@ -24,7 +26,7 @@
     ↓ C2C_MESSAGE_CREATE / INTERACTION_CREATE
 消息处理与会话记忆
     ↓
-OpenAI 兼容 LLM API
+AI 服务商（DeepSeek 或其他 OpenAI 兼容 API）
     ↓
 QQ C2C 消息接口
     ↓
@@ -79,8 +81,6 @@ sudo cp /opt/qq-llm-agent/.env.example /opt/qq-llm-agent/.env
 sudo nano /opt/qq-llm-agent/.env
 ```
 
-填写 QQ 和 LLM 配置：
-
 具体配置请参考[环境变量表](#环境变量)。
 
 保存后设置权限：
@@ -120,12 +120,22 @@ curl http://127.0.0.1:3000/health
 
 服务器无需开放公网端口，可正常连接 QQ 官方 API、Gateway 和 LLM 服务商的 HTTPS/WSS 地址即可。
 
-### 思考等级设置
+### 命令设置
 
 | 命令 | 作用 |
 | --- | --- |
 | `/settings` | 打开 Markdown 思考等级选择菜单 |
 | `/reset` | 清空当前用户的私聊上下文 |
+
+DeepSeek 模式下打开 `/settings` 会显示模型、余额、文件、网页搜索和网页抓取按钮；也可以直接发送以下私聊命令：
+
+| 命令 | 作用 |
+| --- | --- |
+| `/models` | 获取官方模型列表和输入模态 |
+| `/balance` | 查询账户余额 |
+| `/files` | 列出已上传的图像文件 |
+| `/search 关键词` | 调用 DeepSeek Search API |
+| `/fetch https://...` | 调用 DeepSeek Fetch API 抓取网页 Markdown |
 
 ## 环境变量
 
@@ -133,12 +143,16 @@ curl http://127.0.0.1:3000/health
 | --- | --- | --- | --- |
 | `QQ_APP_ID` | 是 | - | QQ 机器人 AppID |
 | `QQ_CLIENT_SECRET` | 是 | - | QQ 机器人 AppSecret |
-| `QQ_API_BASE` | 否 | `https://api.bot.qq.com` | QQ OpenAPI 地址 |
+| `QQ_API_BASE` | 否 | `https://api.bot.qq.com` | QQ 官方 API 地址 |
 | `QQ_GATEWAY_URL` | 否 | 自动获取 | 自定义 Gateway 地址 |
 | `QQ_INTENTS` | 否 | `33554432` | Gateway Identify 位掩码 |
-| `LLM_BASE_URL` | 是 | - | OpenAI 兼容 LLM API 根地址 |
-| `LLM_API_KEY` | 是 | - | LLM 服务商 API Key |
-| `LLM_MODEL` | 是 | - | LLM 模型名称 |
+| `AI_PROVIDER` | 否 | `deepseek` | AI 服务商，可选 `deepseek` 或 `other` |
+| `DEEPSEEK_API_KEY` | `deepseek` 必填 | - | DeepSeek API Key |
+| `DEEPSEEK_BASE_URL` | 否 | `https://api.deepseek.com` | DeepSeek 兼容网关地址；无需填写 |
+| `DEEPSEEK_MODEL` | 否 | `deepseek-flash` | DeepSeek 模型名称 |
+| `OTHER_AI_BASE_URL` | `other` 必填 | - | 其他 AI 服务商的 OpenAI 兼容 API 根地址 |
+| `OTHER_AI_API_KEY` | `other` 必填 | - | 其他 AI 服务商的 API Key |
+| `OTHER_AI_MODEL` | `other` 必填 | - | 其他 AI 服务商的模型名称 |
 | `LLM_REASONING_EFFORT` | 否 | `none` | 默认思考等级；可选 `none`、`minimal`、`low`、`medium`、`high`、`xhigh` |
 | `SYSTEM_PROMPT` | 否 | 空 | Agent 的系统提示词 |
 | `HTTP_PORT` | 否 | `3000` | 本机健康检查端口 |
@@ -150,12 +164,21 @@ QQ_APP_ID=your-qq-app-id
 QQ_CLIENT_SECRET=your-qq-client-secret
 QQ_INTENTS=33554432
 
-LLM_BASE_URL=https://api.deepseek.com
-LLM_API_KEY=your-llm-api-key
-LLM_MODEL=your-model-name
+AI_PROVIDER=deepseek
+DEEPSEEK_API_KEY=your-deepseek-api-key
+DEEPSEEK_MODEL=deepseek-flash
 LLM_REASONING_EFFORT=none
 SYSTEM_PROMPT=
 HTTP_PORT=3000
+```
+
+使用其他模型：
+
+```dotenv
+AI_PROVIDER=other
+OTHER_AI_BASE_URL=https://example.com/v1
+OTHER_AI_API_KEY=your-api-key
+OTHER_AI_MODEL=your-model-name
 ```
 
 ## 项目结构

@@ -11,6 +11,7 @@ const llm = new LlmClient({
   baseUrl: config.llmBaseUrl,
   model: config.llmModel,
   systemPrompt: config.systemPrompt,
+  provider: config.aiProvider,
 });
 const qqApi = new QQApi({
   appId: config.qqAppId,
@@ -37,6 +38,36 @@ const EFFORT_LABELS = {
 const runtimeSettings = {
   reasoningEffort: config.llmReasoningEffort,
 };
+const DEEPSEEK_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "search_web",
+      description: "Search the live web when the user asks for current information or sources.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "The web search query." },
+          count: { type: "integer", minimum: 1, maximum: 10, description: "Number of results." },
+          need_content: { type: "boolean", description: "Whether to include page content." },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "fetch_web_page",
+      description: "Fetch an HTTP or HTTPS page as Markdown after a relevant URL is known.",
+      parameters: {
+        type: "object",
+        properties: { url: { type: "string", description: "The page URL." } },
+        required: ["url"],
+      },
+    },
+  },
+];
 
 function createSettingButton(id, label, data) {
   return {
@@ -69,9 +100,19 @@ function settingsKeyboard() {
     EFFORT_LABELS[effort],
     `effort:${effort}`,
   ));
+  const buttons = [...effortButtons];
+  if (config.aiProvider === "deepseek") {
+    buttons.push(
+      createSettingButton("deepseek-models", "模型列表", "deepseek-command:/models"),
+      createSettingButton("deepseek-balance", "查询余额", "deepseek-command:/balance"),
+      createSettingButton("deepseek-files", "文件列表", "deepseek-command:/files"),
+      createSettingButton("deepseek-search", "网页搜索", "deepseek-command:hint-search"),
+      createSettingButton("deepseek-fetch", "网页抓取", "deepseek-command:hint-fetch"),
+    );
+  }
   return {
     content: {
-      rows: rowsFromButtons(effortButtons, 3),
+      rows: rowsFromButtons(buttons, 3),
     },
   };
 }
@@ -79,7 +120,8 @@ function settingsKeyboard() {
 function settingsMarkdown(prefix = "") {
   const heading = prefix ? `${prefix}\n\n` : "";
   const effortLabel = EFFORT_LABELS[runtimeSettings.reasoningEffort] || runtimeSettings.reasoningEffort;
-  return `${heading}# LLM 设置\n\n> **当前模型**  \`${config.llmModel}\`\n> 由环境变量 \`LLM_MODEL\` 控制\n\n> **当前思考等级**  **${effortLabel}**\n\n## 思考等级\n选择一个按钮应用到后续对话。`;
+  const modelVariable = config.aiProvider === "deepseek" ? "DEEPSEEK_MODEL" : "OTHER_AI_MODEL";
+  return `${heading}# LLM 设置\n\n> **服务商**  \`${config.aiProvider}\`\n> **当前模型**  \`${config.llmModel}\`\n> 由环境变量 \`${modelVariable}\` 控制\n\n> **当前思考等级**  **${effortLabel}**\n\n## 思考等级\n选择一个按钮应用到后续对话。`;
 }
 
 async function sendSettingsMenu(userId, options = {}) {
@@ -106,6 +148,22 @@ async function handleInteraction(data) {
       if (EFFORT_VALUES.has(effort)) {
         runtimeSettings.reasoningEffort = effort;
         prefix = `已设置全局思考等级：**${EFFORT_LABELS[effort]}**`;
+      }
+    }
+
+    if (config.aiProvider === "deepseek" && buttonData.startsWith("deepseek-command:")) {
+      const command = buttonData.slice("deepseek-command:".length);
+      try {
+        if (command === "hint-search") {
+          prefix = "请发送 `/search 关键词` 执行网页搜索。";
+        } else if (command === "hint-fetch") {
+          prefix = "请发送 `/fetch https://...` 抓取网页。";
+        } else {
+          const result = await executeDeepSeekCommand(command);
+          prefix = result ? result.slice(0, 900) : "命令未识别，请重新打开设置菜单。";
+        }
+      } catch (error) {
+        prefix = `操作失败：${error.message}`.slice(0, 900);
       }
     }
 
@@ -148,7 +206,119 @@ function enqueue(userId, task) {
   return current;
 }
 
+async function runDeepSeekTool(name, args) {
+  if (name === "search_web") {
+    return llm.webSearch(args.query, {
+      parameters: {
+        ...(Number.isInteger(args.count) ? { count: args.count } : {}),
+        ...(typeof args.need_content === "boolean" ? { need_content: args.need_content } : {}),
+      },
+    });
+  }
+  if (name === "fetch_web_page") return llm.fetchWebPage(args.url);
+  throw new Error(`Unknown tool: ${name}`);
+}
+
+function messageAttachments(data) {
+  const attachments = [
+    ...(Array.isArray(data?.attachments) ? data.attachments : []),
+    ...(Array.isArray(data?.message?.attachments) ? data.message.attachments : []),
+  ];
+  return attachments.filter((attachment) => {
+    const type = String(attachment?.content_type || attachment?.contentType || "").toLowerCase();
+    return type.startsWith("image/") || /\.(?:png|jpe?g|gif|webp)(?:$|\?)/i.test(String(attachment?.url || ""));
+  });
+}
+
+function buildUserMessage(text, attachments) {
+  if (config.aiProvider !== "deepseek" || attachments.length === 0) {
+    return { role: "user", content: text };
+  }
+  const blocks = [];
+  if (text) blocks.push({ type: "text", text });
+  if (!text) blocks.push({ type: "text", text: "请分析这张图片。" });
+  for (const attachment of attachments) {
+    const url = attachment.url || attachment.href;
+    if (url) blocks.push({ type: "image_url", image_url: { url } });
+  }
+  return { role: "user", content: blocks };
+}
+
+function formatModels(payload) {
+  const models = Array.isArray(payload?.data) ? payload.data : [];
+  if (!models.length) return "DeepSeek 当前没有返回可用模型。";
+  return ["DeepSeek 模型列表：", ...models.map((model) => {
+    const modalities = Array.isArray(model.input_modalities) ? model.input_modalities.join("/") : "text";
+    return `- ${model.id || "unknown"}${model.name ? `（${model.name}）` : ""}，输入：${modalities}`;
+  })].join("\n").slice(0, STREAM_CONTENT_LIMIT);
+}
+
+function formatBalance(payload) {
+  const entries = Array.isArray(payload?.balance_infos) ? payload.balance_infos : [];
+  if (!entries.length) return `DeepSeek 余额状态：${payload?.is_available ? "可用" : "不可用"}`;
+  return ["DeepSeek 余额：", ...entries.map((entry) =>
+    `- ${entry.currency || "未知币种"}：${entry.total_balance ?? "未知"}（赠金 ${entry.granted_balance ?? "未知"}，充值 ${entry.topped_up_balance ?? "未知"}）`,
+  )].join("\n");
+}
+
+function formatSearch(payload) {
+  const results = Array.isArray(payload?.results) ? payload.results : [];
+  if (!results.length) return "没有找到相关网页。";
+  return ["搜索结果：", ...results.slice(0, 8).map((result, index) =>
+    `${index + 1}. ${result.title || result.url}\n${result.url}\n${result.snippet || result.summary || ""}`,
+  )].join("\n\n").slice(0, STREAM_CONTENT_LIMIT);
+}
+
+function formatFiles(payload) {
+  const files = Array.isArray(payload?.data) ? payload.data : [];
+  if (!files.length) return "DeepSeek 文件列表为空。";
+  return ["DeepSeek 文件：", ...files.map((file) =>
+    `- ${file.id || "unknown"} ${file.filename || "未命名"}（${file.bytes ?? "?"} bytes）`,
+  )].join("\n").slice(0, STREAM_CONTENT_LIMIT);
+}
+
+async function executeDeepSeekCommand(text) {
+  if (config.aiProvider !== "deepseek") return null;
+  if (/^\/models$/i.test(text)) {
+    return formatModels(await llm.listModels());
+  }
+  if (/^\/balance$/i.test(text)) {
+    return formatBalance(await llm.getBalance());
+  }
+  if (/^\/files$/i.test(text)) {
+    return formatFiles(await llm.listFiles());
+  }
+  const search = text.match(/^\/search\s+(.+)$/i);
+  if (search) {
+    return formatSearch(await llm.webSearch(search[1], { parameters: { need_content: true } }));
+  }
+  const fetchMatch = text.match(/^\/fetch\s+(https?:\/\/\S+)$/i);
+  if (fetchMatch) {
+    const page = await llm.fetchWebPage(fetchMatch[1]);
+    return `${page.title || fetchMatch[1]}\n\n${page.content || "页面没有可提取内容。"}`.slice(0, STREAM_CONTENT_LIMIT);
+  }
+  return null;
+}
+
+async function handleDeepSeekCommand(userId, messageId, text) {
+  const result = await executeDeepSeekCommand(text);
+  if (!result) return false;
+  await qqApi.sendC2CMessage(userId, result, messageId);
+  return true;
+}
+
 async function streamC2CReply(userId, messageId, history) {
+  if (config.aiProvider === "deepseek") {
+    const result = await llm.chatWithTools(history, {
+      ...runtimeSettings,
+      tools: DEEPSEEK_TOOLS,
+      toolHandler: runDeepSeekTool,
+    });
+    if (!result.content) throw new Error("LLM returned an empty response");
+    await qqApi.sendC2CMessage(userId, result.content.slice(0, STREAM_CONTENT_LIMIT), messageId);
+    return result.content;
+  }
+
   let answer = "";
   let streamMsgId = "";
   let sentAnswer = "";
@@ -200,7 +370,8 @@ async function handleEvent(type, data) {
   const userId = data?.author?.user_openid;
   const messageId = data?.id;
   const text = typeof data?.content === "string" ? data.content.trim() : "";
-  if (!userId || !messageId || !text) return;
+  const attachments = messageAttachments(data);
+  if (!userId || !messageId || (!text && !attachments.length)) return;
   if (wasProcessed(messageId)) return;
 
   return enqueue(userId, async () => {
@@ -219,7 +390,20 @@ async function handleEvent(type, data) {
       return;
     }
 
-    const userMessage = { role: "user", content: text };
+    try {
+      if (await handleDeepSeekCommand(userId, messageId, text)) {
+        markProcessed(messageId);
+        return;
+      }
+    } catch (error) {
+      console.error(`[C2C] DeepSeek command failed for ${userId}:`, error);
+      await qqApi.sendC2CMessage(userId, `操作失败：${error.message}`.slice(0, STREAM_CONTENT_LIMIT), messageId)
+        .catch((replyError) => console.error("[C2C] failed to send command error:", replyError));
+      markProcessed(messageId);
+      return;
+    }
+
+    const userMessage = buildUserMessage(text, attachments);
     memory.append(userId, userMessage);
 
     try {

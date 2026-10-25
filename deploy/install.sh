@@ -82,14 +82,18 @@ read_tty() {
 
 env_description() {
   case "$1" in
+    AI_PROVIDER) printf 'AI 服务商：deepseek 或 other' ;;
     QQ_APP_ID) printf 'QQ 机器人 AppID' ;;
     QQ_CLIENT_SECRET) printf 'QQ 机器人 AppSecret' ;;
     QQ_API_BASE) printf 'QQ OpenAPI 地址' ;;
     QQ_GATEWAY_URL) printf '自定义 Gateway 地址' ;;
     QQ_INTENTS) printf 'Gateway Identify 位掩码' ;;
-    LLM_BASE_URL) printf 'OpenAI 兼容 LLM API 根地址' ;;
-    LLM_API_KEY) printf 'LLM 服务商 API Key' ;;
-    LLM_MODEL) printf 'LLM 模型名称' ;;
+    DEEPSEEK_API_KEY) printf 'DeepSeek API Key' ;;
+    DEEPSEEK_BASE_URL) printf 'DeepSeek API 地址（官方地址可留空）' ;;
+    DEEPSEEK_MODEL) printf 'DeepSeek 模型名称' ;;
+    OTHER_AI_BASE_URL) printf '其他 AI 的 OpenAI 兼容 API 地址' ;;
+    OTHER_AI_API_KEY) printf '其他 AI 的 API Key' ;;
+    OTHER_AI_MODEL) printf '其他 AI 的模型名称' ;;
     LLM_REASONING_EFFORT) printf '默认思考等级：none、minimal、low、medium、high、xhigh' ;;
     SYSTEM_PROMPT) printf 'Agent 的系统提示词' ;;
     HTTP_PORT) printf '本机健康检查端口' ;;
@@ -99,8 +103,9 @@ env_description() {
 
 configure_env() {
   local preserve_existing="${1:-0}"
-  local -a keys=(QQ_APP_ID QQ_CLIENT_SECRET QQ_API_BASE QQ_GATEWAY_URL QQ_INTENTS LLM_BASE_URL LLM_API_KEY LLM_MODEL LLM_REASONING_EFFORT SYSTEM_PROMPT HTTP_PORT)
-  local -a required=(1 1 0 0 0 1 1 1 0 0 0)
+  local provider provider_default provider_input
+  local -a keys=(QQ_APP_ID QQ_CLIENT_SECRET QQ_API_BASE QQ_GATEWAY_URL QQ_INTENTS LLM_REASONING_EFFORT SYSTEM_PROMPT HTTP_PORT)
+  local -a required=(1 1 0 0 0 0 0 0)
   local -a values=()
   local i=0 key description default value confirm prompt tmp kept_existing
 
@@ -111,10 +116,40 @@ configure_env() {
   else
     log '可选项留空则使用默认值。输入 `:back` 返回上一项，输入 `:cancel` 取消本次配置。'
   fi
+
+  provider_default="$(env_get AI_PROVIDER)"
+  [[ -n "${provider_default}" ]] || provider_default="deepseek"
+  provider_default="${provider_default,,}"
+  if [[ "${preserve_existing}" == 1 && -n "$(env_get AI_PROVIDER)" ]]; then
+    prompt="AI_PROVIDER（deepseek 或 other，回车保留当前值，:cancel 取消）： "
+  else
+    prompt="AI_PROVIDER（deepseek 或 other，回车使用 ${provider_default}，:cancel 取消）： "
+  fi
+  read_tty "${prompt}"
+  provider_input="${REPLY,,}"
+  case "${provider_input}" in
+    :cancel) CONFIG_CANCELLED=1; log "已取消配置。"; return 0 ;;
+    "") provider="${provider_default}" ;;
+    deepseek) provider="deepseek" ;;
+    other) provider="other" ;;
+    *) log "AI_PROVIDER 只能是 deepseek 或 other。"; return 0 ;;
+  esac
+
+  if [[ "${provider}" == deepseek ]]; then
+    keys+=(DEEPSEEK_API_KEY DEEPSEEK_MODEL DEEPSEEK_BASE_URL)
+    required+=(1 0 0)
+    log "已选择 DeepSeek：使用 https://api.deepseek.com 默认地址。"
+  else
+    keys+=(OTHER_AI_BASE_URL OTHER_AI_API_KEY OTHER_AI_MODEL)
+    required+=(1 1 1)
+    log "已选择其他 AI：需要填写 OpenAI 兼容地址、API Key 和模型。"
+  fi
+
   while ((i < ${#keys[@]})); do
     key="${keys[i]}"
     description="$(env_description "${key}")"
     default="$(env_get "${key}")"
+    if [[ "${key}" == DEEPSEEK_MODEL && -z "${default}" ]]; then default="deepseek-flash"; fi
     kept_existing=0
     if [[ "${required[i]}" == 1 ]]; then
       if [[ "${preserve_existing}" == 1 && -n "${default}" ]]; then
@@ -168,6 +203,7 @@ configure_env() {
 
   tmp="$(mktemp)"
   cp "${INSTALL_DIR}/.env" "${tmp}"
+  env_set AI_PROVIDER "${provider}" "${tmp}"
   for i in "${!keys[@]}"; do env_set "${keys[i]}" "${values[i]}" "${tmp}"; done
   mv "${tmp}" "${INSTALL_DIR}/.env"
   log "环境变量配置完成。"
@@ -186,10 +222,24 @@ ensure_env() {
 }
 
 valid_env() {
-  local key missing=()
-  for key in QQ_APP_ID QQ_CLIENT_SECRET LLM_BASE_URL LLM_API_KEY LLM_MODEL; do
+  local key provider missing=()
+  for key in QQ_APP_ID QQ_CLIENT_SECRET; do
     [[ -n "$(env_get "${key}")" ]] || missing+=("${key}")
   done
+  provider="$(env_get AI_PROVIDER)"
+  [[ -n "${provider}" ]] || provider="deepseek"
+  provider="${provider,,}"
+  case "${provider}" in
+    deepseek)
+      [[ -n "$(env_get DEEPSEEK_API_KEY)" ]] || missing+=(DEEPSEEK_API_KEY)
+      ;;
+    other)
+      [[ -n "$(env_get OTHER_AI_BASE_URL)" ]] || missing+=(OTHER_AI_BASE_URL)
+      [[ -n "$(env_get OTHER_AI_API_KEY)" ]] || missing+=(OTHER_AI_API_KEY)
+      [[ -n "$(env_get OTHER_AI_MODEL)" ]] || missing+=(OTHER_AI_MODEL)
+      ;;
+    *) missing+=("AI_PROVIDER(deepseek|other)") ;;
+  esac
   if ((${#missing[@]})); then
     log "未填写必填变量：${missing[*]}"
     return 1

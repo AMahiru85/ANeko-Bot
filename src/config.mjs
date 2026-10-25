@@ -32,17 +32,30 @@ function required(name) {
   return value;
 }
 
-const llmModel = required("LLM_MODEL");
-const llmBaseUrl = required("LLM_BASE_URL");
+const aiProvider = process.env.AI_PROVIDER?.trim().toLowerCase() || "deepseek";
+if (!new Set(["deepseek", "other"]).has(aiProvider)) {
+  throw new Error("AI_PROVIDER must be either deepseek or other");
+}
+
+const llmModel = aiProvider === "deepseek"
+  ? (process.env.DEEPSEEK_MODEL?.trim() || "deepseek-flash")
+  : required("OTHER_AI_MODEL");
+const llmBaseUrl = aiProvider === "deepseek"
+  ? (process.env.DEEPSEEK_BASE_URL?.trim() || "https://api.deepseek.com")
+  : required("OTHER_AI_BASE_URL");
+const llmApiKey = aiProvider === "deepseek"
+  ? required("DEEPSEEK_API_KEY")
+  : required("OTHER_AI_API_KEY");
 
 export const config = {
   rootDir,
+  aiProvider,
   qqAppId: required("QQ_APP_ID"),
   qqClientSecret: required("QQ_CLIENT_SECRET"),
   qqApiBase: process.env.QQ_API_BASE?.trim() || "https://api.bot.qq.com",
   qqGatewayUrl: process.env.QQ_GATEWAY_URL?.trim() || "",
   qqIntents: Number.parseInt(process.env.QQ_INTENTS || "33554432", 10),
-  llmApiKey: required("LLM_API_KEY"),
+  llmApiKey,
   llmBaseUrl,
   llmModel,
   llmReasoningEffort: process.env.LLM_REASONING_EFFORT?.trim().toLowerCase() || "none",
