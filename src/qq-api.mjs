@@ -91,4 +91,63 @@ export class QQApi {
     return body;
   }
 
+  async sendC2CMarkdown(openid, content, keyboard, { msgId, eventId } = {}) {
+    const payload = {
+      msg_type: 2,
+      markdown: { content: content.slice(0, 2_000) },
+      keyboard,
+      msg_seq: 1,
+    };
+    if (msgId) payload.msg_id = msgId;
+    if (eventId) payload.event_id = eventId;
+
+    const response = await this.request(`/v2/users/${encodeURIComponent(openid)}/messages`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || body.err_code) {
+      throw new Error(`QQ C2C Markdown reply failed (${response.status}): ${JSON.stringify(body)}`);
+    }
+    return body;
+  }
+
+  async respondInteraction(interactionId, code = 0) {
+    const response = await this.request(`/interactions/${encodeURIComponent(interactionId)}`, {
+      method: "PUT",
+      body: JSON.stringify({ code }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(`QQ interaction response failed (${response.status}): ${JSON.stringify(body)}`);
+    }
+  }
+
+  async sendC2CStreamMessage(openid, content, msgId, streamMsgId, inputState, index = 0) {
+    const payload = {
+      input_mode: "replace",
+      input_state: inputState,
+      index,
+      content_type: "text",
+      content_raw: content.slice(0, 2_000),
+      msg_id: msgId,
+      msg_seq: 1,
+    };
+    if (streamMsgId) payload.stream_msg_id = streamMsgId;
+
+    const response = await this.request(`/v2/users/${encodeURIComponent(openid)}/stream_messages`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || body.err_code) {
+      throw new Error(`QQ C2C stream reply failed (${response.status}): ${JSON.stringify(body)}`);
+    }
+
+    return {
+      ...body,
+      streamMsgId: body.stream_msg_id || body.id || body.message_id || streamMsgId || "",
+    };
+  }
+
 }

@@ -1,17 +1,19 @@
 # ANeko Bot
 
-基于 Node.js 的 QQ 官方机器人私聊 Agent。服务通过 QQ 官方 Gateway 接收 `C2C_MESSAGE_CREATE` 事件，调用 OpenAI 兼容格式的 LLM API，使用 QQ 官方 API 回复。
+基于 Node.js 的 QQ 官方机器人私聊 Agent。服务通过 QQ 官方 Gateway 接收 `C2C_MESSAGE_CREATE` 和 `INTERACTION_CREATE` 事件，调用 OpenAI 兼容格式的 LLM API，使用 QQ 官方 API 回复。
 
 ## 项目
 
 | 能力 | 说明 |
 | --- | --- |
-| QQ 私聊 | 接收并回复 `C2C_MESSAGE_CREATE` 事件 |
+| QQ 私聊 | 接收私聊消息和按钮互动事件，并通过 QQ 官方流式消息接口逐步更新回复 |
 | LLM 对话 | 支持 DeepSeek 以及其他 OpenAI 兼容接口 |
+| 流式回复 | LLM 使用 SSE 增量读取，QQ 使用官方 `stream_messages` 接口更新同一条回复 |
 | 会话记忆 | 按用户保存当前进程内的完整对话，进程重启后清空 |
 | 消息去重 | 防止 QQ 重复推送导致重复调用和重复回复 |
+| 动态模型设置 | 通过 Markdown 内嵌键盘切换全局模型和思考等级 |
 | Gateway 保活 | 自动心跳、断线重连和 Session Resume |
-| 管理命令 | 发送 `/reset` 或 `/clear` 清空当前用户上下文 |
+| 管理命令 | 发送 `/settings` 打开 Markdown 按钮菜单，`/reset` 或 `/clear` 清空当前用户上下文 |
 | 健康检查 | 提供本机 `/health` 接口 |
 
 ## 工作流程
@@ -20,7 +22,7 @@
 QQ 用户
     ↓
 QQ 官方 Gateway WebSocket
-    ↓ C2C_MESSAGE_CREATE
+    ↓ C2C_MESSAGE_CREATE / INTERACTION_CREATE
 消息处理与会话记忆
     ↓
 OpenAI 兼容 LLM API
@@ -30,10 +32,14 @@ QQ 官方 C2C 消息接口
 用户收到回复
 ```
 
+模型响应通过 OpenAI 兼容接口的 SSE 流逐段读取，再通过 QQ 官方 [`stream_messages` 接口](https://bot.q.qq.com/wiki/develop/api-v2/autogen/api/v2_users_user_openid_stream_messages.post.html) 更新同一条 C2C 回复。QQ 端按约 100 毫秒合并一次增量，最终状态会发送完整内容。
+
 ## QQ 开放平台配置
 
 1. 在 [QQ 开放平台](https://q.qq.com/) 创建机器人。
 2. 获取 `AppID` 和 `AppSecret`。
+
+程序会自动订阅按钮互动事件，点击设置菜单中的按钮即可修改运行时模型和思考等级。
 
 ## 部署
 
@@ -121,6 +127,15 @@ curl http://127.0.0.1:3000/health
 
 服务器无需开放公网端口，可正常连接 QQ 官方 API、Gateway 和 LLM 服务商的 HTTPS/WSS 地址即可。
 
+### 运行时调节模型和思考等级
+
+向机器人发送 `/settings`，机器人会返回带按钮的 Markdown 设置菜单。点击按钮后设置立即作用于后续 LLM 请求。设置只保存在当前进程内，服务重启后恢复 `.env` 中的默认值。模型和思考等级通过菜单按钮调整。
+
+| 命令 | 作用 |
+| --- | --- |
+| `/settings` | 打开 Markdown 模型和思考等级选择菜单 |
+| `/reset` 或 `/clear` | 清空当前用户的私聊上下文 |
+
 ## 环境变量
 
 | 变量 | 必填 | 默认值 | 说明 |
@@ -129,14 +144,16 @@ curl http://127.0.0.1:3000/health
 | `QQ_CLIENT_SECRET` | 是 | - | QQ 机器人 AppSecret |
 | `QQ_API_BASE` | 否 | `https://api.bot.qq.com` | QQ OpenAPI 地址 |
 | `QQ_GATEWAY_URL` | 否 | 自动获取 | 自定义 Gateway 地址 |
-| `QQ_INTENTS` | 否 | `33554432` | Gateway Identify 位掩码，通常不需要修改 |
+| `QQ_INTENTS` | 否 | `33554432` | Gateway Identify 位掩码；程序会自动附加按钮互动 Intent |
 | `LLM_API_KEY` | 是 | - | LLM 服务商 API Key |
 | `LLM_BASE_URL` | 否 | `https://api.deepseek.com` | OpenAI 兼容 API 根地址 |
 | `LLM_MODEL` | 否 | `deepseek-chat` | 模型名称 |
+| `LLM_MODELS` | 否 | 空 | 逗号分隔的模型选择列表，前 12 个显示在 Markdown 菜单中；留空时只显示 `LLM_MODEL` |
+| `LLM_REASONING_EFFORT` | 否 | `none` | 默认思考等级；可选 `none`、`minimal`、`low`、`medium`、`high`、`xhigh` |
 | `SYSTEM_PROMPT` | 否 | 空 | Agent 的系统提示词 |
 | `HTTP_PORT` | 否 | `3000` | 本机健康检查端口 |
 
-默认配置使用 DeepSeek 作为示例。切换到其他 OpenAI 兼容服务时，只需要修改 `LLM_API_KEY`、`LLM_BASE_URL` 和 `LLM_MODEL`。
+默认配置使用 DeepSeek 作为示例。切换到其他 OpenAI 兼容服务时，修改 `LLM_API_KEY`、`LLM_BASE_URL` 和 `LLM_MODEL`，并可通过 `LLM_MODELS` 配置 Markdown 菜单中的候选模型。
 
 示例：
 
@@ -148,6 +165,8 @@ QQ_INTENTS=33554432
 LLM_API_KEY=your-llm-api-key
 LLM_BASE_URL=https://api.deepseek.com
 LLM_MODEL=deepseek-chat
+LLM_MODELS=deepseek-chat,deepseek-reasoner
+LLM_REASONING_EFFORT=none
 SYSTEM_PROMPT=
 HTTP_PORT=3000
 ```
@@ -160,7 +179,7 @@ src/
 ├── index.mjs        # 服务入口、消息处理和健康检查
 ├── llm.mjs          # OpenAI 兼容 LLM 客户端
 ├── memory.mjs       # 按用户隔离的完整进程内会话记忆
-├── qq-api.mjs       # QQ Access Token 和 C2C REST API
+├── qq-api.mjs       # QQ Access Token、普通/Markdown/流式 C2C API
 └── qq-gateway.mjs   # QQ Gateway WebSocket、心跳和 Resume
 deploy/
 ├── install.sh             # 部署脚本

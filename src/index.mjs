@@ -22,6 +22,112 @@ const qqApi = new QQApi({
 const userQueues = new Map();
 const processedMessages = new Map();
 const PROCESSED_MESSAGE_TTL = 10 * 60 * 1_000;
+const STREAM_UPDATE_INTERVAL_MS = 100;
+const STREAM_CONTENT_LIMIT = 2_000;
+const INTERACTION_INTENT = 1 << 26;
+const EFFORT_VALUES = new Set(["none", "minimal", "low", "medium", "high", "xhigh"]);
+const MODEL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/;
+const EFFORT_LABELS = {
+  none: "关闭",
+  minimal: "最低",
+  low: "低",
+  medium: "中",
+  high: "高",
+  xhigh: "最高",
+};
+const runtimeSettings = {
+  model: config.llmModel,
+  reasoningEffort: config.llmReasoningEffort,
+};
+
+function createSettingButton(id, label, data, selected) {
+  return {
+    id,
+    render_data: {
+      label: label.slice(0, 10),
+      visited_label: "已选择",
+      style: selected ? 1 : 0,
+    },
+    action: { type: 1, data },
+  };
+}
+
+function rowsFromButtons(buttons, size = 4) {
+  const rows = [];
+  for (let i = 0; i < buttons.length; i += size) rows.push({ buttons: buttons.slice(i, i + size) });
+  return rows;
+}
+
+function availableModels() {
+  return [...new Set([runtimeSettings.model, ...config.llmModels])].slice(0, 12);
+}
+
+function settingsKeyboard() {
+  const modelButtons = availableModels().map((model, index) => createSettingButton(
+    `model-${index}`,
+    model.length <= 10 ? model : `模型 ${index + 1}`,
+    `model:${model}`,
+    model === runtimeSettings.model,
+  ));
+  const effortButtons = [...EFFORT_VALUES].map((effort) => createSettingButton(
+    `effort-${effort}`,
+    EFFORT_LABELS[effort],
+    `effort:${effort}`,
+    effort === runtimeSettings.reasoningEffort,
+  ));
+  return {
+    content: {
+      rows: [...rowsFromButtons(modelButtons), ...rowsFromButtons(effortButtons)],
+    },
+  };
+}
+
+function settingsMarkdown(prefix = "") {
+  const modelList = availableModels().map((model, index) => `${index + 1}. \`${model}\``).join("\n");
+  const heading = prefix ? `${prefix}\n\n` : "";
+  return `${heading}# LLM 设置\n\n**当前模型：** \`${runtimeSettings.model}\`\n\n**当前思考等级：** ${EFFORT_LABELS[runtimeSettings.reasoningEffort] || runtimeSettings.reasoningEffort}\n\n**可选模型：**\n${modelList}\n\n点击下方按钮即可应用设置。`;
+}
+
+async function sendSettingsMenu(userId, options = {}) {
+  return qqApi.sendC2CMarkdown(userId, settingsMarkdown(options.prefix), settingsKeyboard(), options);
+}
+
+async function handleInteraction(data) {
+  if (data?.type !== 11 || data.scene !== "c2c") return;
+
+  const interactionId = data.id;
+  const userId = data.user_openid;
+  if (!interactionId || !userId || wasProcessed(interactionId)) return;
+
+  await qqApi.respondInteraction(interactionId).catch((error) => {
+    console.error("[QQ] failed to acknowledge interaction:", error);
+  });
+  markProcessed(interactionId);
+
+  const buttonData = data.data?.resolved?.button_data || data.data?.button_data || "";
+  return enqueue(userId, async () => {
+    let prefix = "按钮操作未识别。";
+    if (buttonData.startsWith("model:")) {
+      const model = buttonData.slice("model:".length);
+      if (model && MODEL_NAME_PATTERN.test(model) && availableModels().includes(model)) {
+        runtimeSettings.model = model;
+        prefix = `已切换全局模型：\`${model}\``;
+      } else {
+        prefix = "模型选项已失效，请重新打开设置菜单。";
+      }
+    } else if (buttonData.startsWith("effort:")) {
+      const effort = buttonData.slice("effort:".length).toLowerCase();
+      if (EFFORT_VALUES.has(effort)) {
+        runtimeSettings.reasoningEffort = effort;
+        prefix = `已设置全局思考等级：**${EFFORT_LABELS[effort]}**`;
+      }
+    }
+
+    await sendSettingsMenu(userId, { eventId: interactionId, prefix }).catch((error) => {
+      console.error("[C2C] failed to send settings menu:", error);
+    });
+  });
+}
 
 function wasProcessed(messageId) {
   const timestamp = processedMessages.get(messageId);
@@ -56,7 +162,53 @@ function enqueue(userId, task) {
   return current;
 }
 
+async function streamC2CReply(userId, messageId, history) {
+  let answer = "";
+  let streamMsgId = "";
+  let sentAnswer = "";
+  let lastSentAt = 0;
+  let index = 0;
+
+  try {
+    for await (const delta of llm.stream(history, runtimeSettings)) {
+      answer += delta;
+      const content = answer.slice(0, STREAM_CONTENT_LIMIT);
+      const shouldSend = content.trim() && content !== sentAnswer && (
+        !streamMsgId || Date.now() - lastSentAt >= STREAM_UPDATE_INTERVAL_MS
+      );
+      if (shouldSend) {
+        const reply = await qqApi.sendC2CStreamMessage(userId, content, messageId, streamMsgId, 1, index);
+        streamMsgId = reply.streamMsgId;
+        if (!streamMsgId) throw new Error("QQ stream reply did not return stream message id");
+        sentAnswer = content;
+        index += 1;
+        lastSentAt = Date.now();
+      }
+    }
+
+    if (!streamMsgId || !answer.trim()) throw new Error("LLM returned an empty response");
+    await qqApi.sendC2CStreamMessage(
+      userId,
+      answer.slice(0, STREAM_CONTENT_LIMIT),
+      messageId,
+      streamMsgId,
+      10,
+      index,
+    );
+    return answer.trim();
+  } catch (error) {
+    if (streamMsgId) {
+      error.streamStarted = true;
+      const interrupted = `${answer.slice(0, STREAM_CONTENT_LIMIT)}\n\n（生成中断，请稍后重试）`.slice(0, STREAM_CONTENT_LIMIT);
+      await qqApi.sendC2CStreamMessage(userId, interrupted, messageId, streamMsgId, 10, index)
+        .catch((replyError) => console.error("[C2C] failed to finalize stream reply:", replyError));
+    }
+    throw error;
+  }
+}
+
 async function handleEvent(type, data) {
+  if (type === "INTERACTION_CREATE") return handleInteraction(data);
   if (type !== "C2C_MESSAGE_CREATE") return;
 
   const userId = data?.author?.user_openid;
@@ -75,21 +227,28 @@ async function handleEvent(type, data) {
       return;
     }
 
+    if (/^\/settings$/i.test(text)) {
+      await sendSettingsMenu(userId, { msgId: messageId });
+      markProcessed(messageId);
+      return;
+    }
+
     const userMessage = { role: "user", content: text };
     memory.append(userId, userMessage);
 
     try {
-      const answer = await llm.chat(memory.get(userId));
+      const answer = await streamC2CReply(userId, messageId, memory.get(userId));
       memory.append(userId, { role: "assistant", content: answer });
-      await qqApi.sendC2CMessage(userId, answer, messageId);
       markProcessed(messageId);
       console.log(`[C2C] ${userId}: ${text.slice(0, 80)} -> ${answer.slice(0, 80)}`);
     } catch (error) {
       memory.removeLast(userId, userMessage);
       console.error(`[C2C] failed for ${userId}:`, error);
-      await qqApi.sendC2CMessage(userId, "服务暂时繁忙，请稍后再试。", messageId).catch((replyError) => {
-        console.error("[C2C] failed to send error reply:", replyError);
-      });
+      if (!error.streamStarted) {
+        await qqApi.sendC2CMessage(userId, "服务暂时繁忙，请稍后再试。", messageId).catch((replyError) => {
+          console.error("[C2C] failed to send error reply:", replyError);
+        });
+      }
       markProcessed(messageId);
     }
   });
@@ -111,7 +270,7 @@ server.listen(config.httpPort, "127.0.0.1", () => {
 
 const gateway = new QQGateway({
   api: qqApi,
-  intents: config.qqIntents,
+  intents: config.qqIntents | INTERACTION_INTENT,
   onEvent: handleEvent,
   onError: (error) => console.error("[QQ]", error),
 });

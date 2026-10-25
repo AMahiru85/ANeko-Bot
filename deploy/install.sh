@@ -81,8 +81,8 @@ read_tty() {
 }
 
 configure_env() {
-  local -a keys=(QQ_APP_ID QQ_CLIENT_SECRET QQ_API_BASE QQ_GATEWAY_URL QQ_INTENTS LLM_API_KEY LLM_BASE_URL LLM_MODEL SYSTEM_PROMPT HTTP_PORT)
-  local -a required=(1 1 0 0 0 1 0 0 0 0)
+  local -a keys=(QQ_APP_ID QQ_CLIENT_SECRET QQ_API_BASE QQ_GATEWAY_URL QQ_INTENTS LLM_API_KEY LLM_BASE_URL LLM_MODEL LLM_MODELS LLM_REASONING_EFFORT SYSTEM_PROMPT HTTP_PORT)
+  local -a required=(1 1 0 0 0 1 0 0 0 0 0 0)
   local -a values=()
   local i=0 key default value confirm prompt tmp
 

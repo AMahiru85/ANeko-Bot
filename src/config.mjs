@@ -32,6 +32,15 @@ function required(name) {
   return value;
 }
 
+function parseModelList(value, fallback) {
+  const models = [fallback, ...(value || "").split(",")]
+    .map((model) => model.trim())
+    .filter((model) => /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/.test(model));
+  return [...new Set(models.length ? models : [fallback])].slice(0, 20);
+}
+
+const llmModel = process.env.LLM_MODEL?.trim() || "deepseek-chat";
+
 export const config = {
   rootDir,
   qqAppId: required("QQ_APP_ID"),
@@ -41,7 +50,9 @@ export const config = {
   qqIntents: Number.parseInt(process.env.QQ_INTENTS || "33554432", 10),
   llmApiKey: required("LLM_API_KEY"),
   llmBaseUrl: process.env.LLM_BASE_URL?.trim() || "https://api.deepseek.com",
-  llmModel: process.env.LLM_MODEL?.trim() || "deepseek-chat",
+  llmModel,
+  llmModels: parseModelList(process.env.LLM_MODELS, llmModel),
+  llmReasoningEffort: process.env.LLM_REASONING_EFFORT?.trim().toLowerCase() || "none",
   systemPrompt: process.env.SYSTEM_PROMPT?.trim() || "",
   httpPort: Number.parseInt(process.env.HTTP_PORT || "3000", 10),
 };
@@ -52,4 +63,8 @@ if (!Number.isInteger(config.qqIntents) || config.qqIntents <= 0) {
 
 if (!Number.isInteger(config.httpPort) || config.httpPort < 1 || config.httpPort > 65_535) {
   throw new Error("HTTP_PORT must be an integer between 1 and 65535");
+}
+
+if (!/^(none|minimal|low|medium|high|xhigh)$/.test(config.llmReasoningEffort)) {
+  throw new Error("LLM_REASONING_EFFORT must be one of: none, minimal, low, medium, high, xhigh");
 }
