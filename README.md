@@ -1,17 +1,16 @@
 # ANeko Bot
 
-基于 Node.js 的 QQ 官方机器人私聊 Agent。服务通过 QQ 官方 Gateway 接收 `C2C_MESSAGE_CREATE` 和 `INTERACTION_CREATE` 事件，调用 OpenAI 兼容格式的 LLM API，使用 QQ 官方 API 回复。
+基于 Node.js 的 QQ 官方机器人 Agent。
 
 ## 项目
 
 | 能力 | 说明 |
 | --- | --- |
-| QQ 私聊 | 接收私聊消息和按钮互动事件，并通过 QQ 官方流式消息接口逐步更新回复 |
-| LLM 对话 | 支持 DeepSeek 以及其他 OpenAI 兼容接口 |
-| 流式回复 | LLM 使用 SSE 增量读取，QQ 使用官方 `stream_messages` 接口更新同一条回复 |
+| QQ 互动 | 接收消息和按钮互动事件 |
+| LLM 设置 | 支持 OpenAI 兼容接口 |
 | 会话记忆 | 按用户保存当前进程内的完整对话，进程重启后清空 |
-| 消息去重 | 防止 QQ 重复推送导致重复调用和重复回复 |
-| 动态模型设置 | 通过 Markdown 内嵌键盘切换全局模型和思考等级 |
+| 消息去重 | 防止 QQ 重复推送导致重复调用和回复 |
+| 动态模型设置 | 通过 Markdown 切换全局模型和思考等级 |
 | Gateway 保活 | 自动心跳、断线重连和 Session Resume |
 | 管理命令 | 发送 `/settings` 打开 Markdown 按钮菜单，`/reset` 清空当前用户上下文 |
 | 健康检查 | 提供 `/health` 接口 |
@@ -19,15 +18,15 @@
 ## 工作流程
 
 ```text
-QQ 用户
+用户
     ↓
-QQ 官方 Gateway WebSocket
+官方 Gateway WebSocket
     ↓ C2C_MESSAGE_CREATE / INTERACTION_CREATE
 消息处理与会话记忆
     ↓
 OpenAI 兼容 LLM API
     ↓
-QQ 官方 C2C 消息接口
+QQ C2C 消息接口
     ↓
 用户收到回复
 ```
@@ -124,6 +123,7 @@ curl http://127.0.0.1:3000/health
 服务器无需开放公网端口，可正常连接 QQ 官方 API、Gateway 和 LLM 服务商的 HTTPS/WSS 地址即可。
 
 ### 模型设置
+
 | 命令 | 作用 |
 | --- | --- |
 | `/settings` | 打开 Markdown 模型和思考等级选择菜单 |
