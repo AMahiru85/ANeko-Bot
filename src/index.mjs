@@ -70,19 +70,22 @@ function settingsKeyboard() {
     EFFORT_LABELS[effort],
     `effort:${effort}`,
   ));
-  const buttons = [...effortButtons];
+  const rows = rowsFromButtons(effortButtons, 3);
   if (config.aiProvider === "deepseek") {
-    buttons.push(
+    rows.push(...rowsFromButtons([
       createSettingButton("deepseek-models", "模型列表", "deepseek-command:/models"),
       createSettingButton("deepseek-balance", "查询余额", "deepseek-command:/balance"),
       createSettingButton("deepseek-files", "文件列表", "deepseek-command:/files"),
       createSettingButton("deepseek-search", "网页搜索", "deepseek-command:hint-search"),
       createSettingButton("deepseek-fetch", "网页抓取", "deepseek-command:hint-fetch"),
-    );
+    ], 3));
   }
+  rows.push({
+    buttons: [createSettingButton("settings-reset", "清空会话", "settings-command:reset")],
+  });
   return {
     content: {
-      rows: rowsFromButtons(buttons, 3),
+      rows,
     },
   };
 }
@@ -91,7 +94,24 @@ function settingsMarkdown(prefix = "") {
   const heading = prefix ? `${prefix}\n\n` : "";
   const effortLabel = EFFORT_LABELS[runtimeSettings.reasoningEffort] || runtimeSettings.reasoningEffort;
   const modelVariable = config.aiProvider === "deepseek" ? "DEEPSEEK_MODEL" : "OTHER_AI_MODEL";
-  return `${heading}# LLM 设置\n\n> **服务商**  \`${config.aiProvider}\`\n> **当前模型**  \`${config.llmModel}\`\n> 由环境变量 \`${modelVariable}\` 控制\n\n> **当前思考等级**  **${effortLabel}**\n\n## 思考等级\n选择一个按钮应用到后续对话。`;
+  const sections = [
+    "# LLM 设置",
+    `> **服务商**  \`${config.aiProvider}\``,
+    `> **当前模型**  \`${config.llmModel}\``,
+    `> 由环境变量 \`${modelVariable}\` 控制`,
+    "",
+    "## 模型参数",
+    `当前思考等级：**${effortLabel}**`,
+  ];
+  if (config.aiProvider === "deepseek") {
+    sections.push(
+      "",
+      "## DeepSeek 工具",
+      "模型、账户、文件与网页能力",
+    );
+  }
+  sections.push("", "## 会话操作", "清空当前私聊上下文");
+  return `${heading}${sections.join("\n")}`;
 }
 
 async function sendSettingsMenu(userId, options = {}) {
@@ -119,6 +139,11 @@ async function handleInteraction(data) {
         runtimeSettings.reasoningEffort = effort;
         prefix = `已设置全局思考等级：**${EFFORT_LABELS[effort]}**`;
       }
+    }
+
+    if (buttonData === "settings-command:reset") {
+      memory.clear(userId);
+      prefix = "已清空当前私聊上下文。";
     }
 
     if (config.aiProvider === "deepseek" && buttonData.startsWith("deepseek-command:")) {
