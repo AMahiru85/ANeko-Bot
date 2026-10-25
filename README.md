@@ -2,7 +2,7 @@
 
 基于 Node.js 的 QQ 官方机器人 Agent。
 
-已对DeepSeek进行适配，其他 AI 服务商适配将逐步进行，现已兼容文本对话。
+已对 DeepSeek 进行适配，其他 AI 服务商适配将逐步进行，现已兼容文本对话。
 
 ## 项目
 
@@ -137,6 +137,8 @@ DeepSeek 模式下打开 `/settings` 会显示模型、余额、文件、网页�
 | `/files` | 列出已上传的图像文件 |
 | `/search 关键词` | 调用 DeepSeek Search API |
 | `/fetch https://...` | 调用 DeepSeek Fetch API 抓取网页 Markdown |
+
+DeepSeek 普通对话使用 QQ 流式回复；客户端保留 Tool Calls 支持，网页搜索和抓取通过设置菜单按钮或对应命令调用。
 
 ## 环境变量
 

@@ -82,18 +82,17 @@ read_tty() {
 
 env_description() {
   case "$1" in
-    AI_PROVIDER) printf 'AI 服务商：deepseek 或 other' ;;
+    AI_PROVIDER) printf 'AI 服务商，可选 deepseek 或 other' ;;
     QQ_APP_ID) printf 'QQ 机器人 AppID' ;;
     QQ_CLIENT_SECRET) printf 'QQ 机器人 AppSecret' ;;
-    QQ_API_BASE) printf 'QQ OpenAPI 地址' ;;
+    QQ_API_BASE) printf 'QQ 官方 API 地址' ;;
     QQ_GATEWAY_URL) printf '自定义 Gateway 地址' ;;
     QQ_INTENTS) printf 'Gateway Identify 位掩码' ;;
     DEEPSEEK_API_KEY) printf 'DeepSeek API Key' ;;
-    DEEPSEEK_BASE_URL) printf 'DeepSeek API 地址（官方地址可留空）' ;;
     DEEPSEEK_MODEL) printf 'DeepSeek 模型名称' ;;
-    OTHER_AI_BASE_URL) printf '其他 AI 的 OpenAI 兼容 API 地址' ;;
-    OTHER_AI_API_KEY) printf '其他 AI 的 API Key' ;;
-    OTHER_AI_MODEL) printf '其他 AI 的模型名称' ;;
+    OTHER_AI_BASE_URL) printf '其他 AI 服务商的 OpenAI 兼容 API 根地址' ;;
+    OTHER_AI_API_KEY) printf '其他 AI 服务商的 API Key' ;;
+    OTHER_AI_MODEL) printf '其他 AI 服务商的模型名称' ;;
     LLM_REASONING_EFFORT) printf '默认思考等级：none、minimal、low、medium、high、xhigh' ;;
     SYSTEM_PROMPT) printf 'Agent 的系统提示词' ;;
     HTTP_PORT) printf '本机健康检查端口' ;;
@@ -136,8 +135,8 @@ configure_env() {
   esac
 
   if [[ "${provider}" == deepseek ]]; then
-    keys+=(DEEPSEEK_API_KEY DEEPSEEK_MODEL DEEPSEEK_BASE_URL)
-    required+=(1 0 0)
+    keys+=(DEEPSEEK_API_KEY DEEPSEEK_MODEL)
+    required+=(1 0)
     log "已选择 DeepSeek：使用 https://api.deepseek.com 默认地址。"
   else
     keys+=(OTHER_AI_BASE_URL OTHER_AI_API_KEY OTHER_AI_MODEL)

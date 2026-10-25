@@ -38,36 +38,6 @@ const EFFORT_LABELS = {
 const runtimeSettings = {
   reasoningEffort: config.llmReasoningEffort,
 };
-const DEEPSEEK_TOOLS = [
-  {
-    type: "function",
-    function: {
-      name: "search_web",
-      description: "Search the live web when the user asks for current information or sources.",
-      parameters: {
-        type: "object",
-        properties: {
-          query: { type: "string", description: "The web search query." },
-          count: { type: "integer", minimum: 1, maximum: 10, description: "Number of results." },
-          need_content: { type: "boolean", description: "Whether to include page content." },
-        },
-        required: ["query"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "fetch_web_page",
-      description: "Fetch an HTTP or HTTPS page as Markdown after a relevant URL is known.",
-      parameters: {
-        type: "object",
-        properties: { url: { type: "string", description: "The page URL." } },
-        required: ["url"],
-      },
-    },
-  },
-];
 
 function createSettingButton(id, label, data) {
   return {
@@ -206,19 +176,6 @@ function enqueue(userId, task) {
   return current;
 }
 
-async function runDeepSeekTool(name, args) {
-  if (name === "search_web") {
-    return llm.webSearch(args.query, {
-      parameters: {
-        ...(Number.isInteger(args.count) ? { count: args.count } : {}),
-        ...(typeof args.need_content === "boolean" ? { need_content: args.need_content } : {}),
-      },
-    });
-  }
-  if (name === "fetch_web_page") return llm.fetchWebPage(args.url);
-  throw new Error(`Unknown tool: ${name}`);
-}
-
 function messageAttachments(data) {
   const attachments = [
     ...(Array.isArray(data?.attachments) ? data.attachments : []),
@@ -308,17 +265,6 @@ async function handleDeepSeekCommand(userId, messageId, text) {
 }
 
 async function streamC2CReply(userId, messageId, history) {
-  if (config.aiProvider === "deepseek") {
-    const result = await llm.chatWithTools(history, {
-      ...runtimeSettings,
-      tools: DEEPSEEK_TOOLS,
-      toolHandler: runDeepSeekTool,
-    });
-    if (!result.content) throw new Error("LLM returned an empty response");
-    await qqApi.sendC2CMessage(userId, result.content.slice(0, STREAM_CONTENT_LIMIT), messageId);
-    return result.content;
-  }
-
   let answer = "";
   let streamMsgId = "";
   let sentAnswer = "";
