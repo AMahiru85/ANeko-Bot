@@ -1,0 +1,18 @@
+[Unit]
+Description=ANeko-Bot QQ Official Bot agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aneko-bot
+WorkingDirectory=/opt/aneko-bot
+EnvironmentFile=/opt/aneko-bot/.env
+ExecStart=/usr/bin/node /opt/aneko-bot/src/index.mjs
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

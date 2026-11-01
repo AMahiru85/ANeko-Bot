@@ -1,0 +1,15 @@
+{
+  "name": "aneko-bot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ANeko-Bot QQ Official Bot agent with streaming OpenAI-compatible model support",
+  "type": "module",
+  "engines": {
+    "node": ">=22.4.0"
+  },
+  "scripts": {
+    "start": "node src/index.mjs",
+    "dev": "node --watch src/index.mjs",
+    "check": "node --check src/config.mjs && node --check src/llm.mjs && node --check src/memory.mjs && node --check src/qq-api.mjs && node --check src/qq-gateway.mjs && node --check src/index.mjs"
+  }
+}
