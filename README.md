@@ -32,7 +32,7 @@ node src/index.mjs
 curl http://127.0.0.1:3000/health
 ```
 
-### 一键安装（Ubuntu/Debian）
+### Linux 一键安装（Ubuntu/Debian）
 
 根目录脚本是远程引导器：它会下载远程部署脚本，远程拉取仓库到 `/opt/aneko-bot`，安装 Node.js 22、创建 `aneko-bot` 系统用户、配置 systemd 并启动服务：
 
