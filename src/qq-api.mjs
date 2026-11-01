@@ -2,8 +2,8 @@ export class QQApi {
   constructor({ appId, clientSecret, authBase, apiBase, gatewayUrl }) {
     this.appId = appId;
     this.clientSecret = clientSecret;
-    this.authBase = (authBase || "https://bots.qq.com").replace(/\/$/, "");
-    this.apiBase = apiBase.replace(/\/$/, "");
+    this.authBase = (authBase || "https://api.bot.qq.com").replace(/\/$/, "");
+    this.apiBase = (apiBase || "https://api.bot.qq.com").replace(/\/$/, "");
     this.gatewayUrl = gatewayUrl;
     this.token = null;
     this.tokenExpiresAt = 0;
@@ -44,7 +44,6 @@ export class QQApi {
     const send = async (token) => {
       const headers = new Headers(options.headers || {});
       headers.set("Authorization", `QQBot ${token}`);
-      headers.set("X-Union-Appid", this.appId);
       if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
       return fetch(`${this.apiBase}${path}`, {
         ...options,
@@ -76,15 +75,17 @@ export class QQApi {
     return body.url;
   }
 
-  async sendC2CMessage(openid, content, msgId, msgSeq = 1) {
+  async sendC2CMessage(openid, content, msgId, msgSeq = 1, eventId) {
+    const payload = {
+      content: content.slice(0, 1_800),
+      msg_type: 0,
+      msg_seq: msgSeq,
+    };
+    if (eventId) payload.event_id = eventId;
+    else if (msgId) payload.msg_id = msgId;
     const response = await this.request(`/v2/users/${encodeURIComponent(openid)}/messages`, {
       method: "POST",
-      body: JSON.stringify({
-        content: content.slice(0, 1_800),
-        msg_type: 0,
-        msg_id: msgId,
-        msg_seq: msgSeq,
-      }),
+      body: JSON.stringify(payload),
     });
 
     const body = await response.json().catch(() => ({}));
@@ -94,10 +95,17 @@ export class QQApi {
     return body;
   }
 
-  async sendGroupMessage(groupOpenid, content, msgId) {
+  async sendGroupMessage(groupOpenid, content, msgId, msgSeq = 1, eventId) {
+    const payload = {
+      content: content.slice(0, 1_800),
+      msg_type: 0,
+      msg_seq: msgSeq,
+    };
+    if (eventId) payload.event_id = eventId;
+    else if (msgId) payload.msg_id = msgId;
     const response = await this.request(`/v2/groups/${encodeURIComponent(groupOpenid)}/messages`, {
       method: "POST",
-      body: JSON.stringify({ content: content.slice(0, 1_800), msg_type: 0, ...(msgId ? { msg_id: msgId } : {}) }),
+      body: JSON.stringify(payload),
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok || body.err_code || body.code) throw new Error(`QQ group reply failed (${response.status}): ${JSON.stringify(body)}`);
@@ -105,12 +113,24 @@ export class QQApi {
   }
 
   async sendChannelMessage(channelId, content, msgId) {
+    const payload = { content: content.slice(0, 1_800), ...(msgId ? { msg_id: msgId } : {}) };
     const response = await this.request(`/channels/${encodeURIComponent(channelId)}/messages`, {
       method: "POST",
-      body: JSON.stringify({ content: content.slice(0, 1_800), ...(msgId ? { msg_id: msgId } : {}) }),
+      body: JSON.stringify(payload),
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok || body.err_code || body.code) throw new Error(`QQ channel reply failed (${response.status}): ${JSON.stringify(body)}`);
+    return body;
+  }
+
+  async sendDirectMessage(guildId, content, msgId) {
+    const payload = { content: content.slice(0, 1_800), ...(msgId ? { msg_id: msgId } : {}) };
+    const response = await this.request(`/dms/${encodeURIComponent(guildId)}/messages`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || body.err_code || body.code) throw new Error(`QQ direct message reply failed (${response.status}): ${JSON.stringify(body)}`);
     return body;
   }
 
@@ -121,8 +141,8 @@ export class QQApi {
       keyboard,
       msg_seq: 1,
     };
-    if (msgId) payload.msg_id = msgId;
     if (eventId) payload.event_id = eventId;
+    else if (msgId) payload.msg_id = msgId;
 
     const response = await this.request(`/v2/users/${encodeURIComponent(openid)}/messages`, {
       method: "POST",

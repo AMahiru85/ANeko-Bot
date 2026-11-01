@@ -91,7 +91,6 @@ const builtIns = [
   providerFromEnv("openai", "OpenAI", "OPENAI", { baseUrl: "https://api.openai.com/v1", defaultModel: "gpt-4o-mini", capabilities: { vision: true, files: true, modelList: true } }),
   providerFromEnv("moonshot", "Moonshot", "MOONSHOT", { baseUrl: "https://api.moonshot.cn/v1", defaultModel: "moonshot-v1-8k", capabilities: { vision: true } }),
   providerFromEnv("qwen", "通义千问", "QWEN", { baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", defaultModel: "qwen-plus", capabilities: { vision: true } }),
-  providerFromEnv("siliconflow", "SiliconFlow", "SILICONFLOW", { baseUrl: "https://api.siliconflow.cn/v1", defaultModel: "deepseek-ai/DeepSeek-V3", capabilities: { vision: true } }),
 ].filter(Boolean);
 for (const provider of builtIns) providers[provider.id] = provider;
 
@@ -137,8 +136,9 @@ export const config = {
   providers,
   qqAppId: required("QQ_APP_ID"),
   qqAppSecret: qqAppSecret || required("QQ_APP_SECRET"),
-  qqAuthBase: process.env.QQ_AUTH_BASE?.trim() || "https://bots.qq.com",
-  qqApiBase: process.env.QQ_API_BASE?.trim() || "https://api.sgroup.qq.com",
+  // QQ 官方文档当前统一使用 api.bot.qq.com；环境变量仍可覆盖代理或旧网关。
+  qqAuthBase: process.env.QQ_AUTH_BASE?.trim() || "https://api.bot.qq.com",
+  qqApiBase: process.env.QQ_API_BASE?.trim() || "https://api.bot.qq.com",
   qqGatewayUrl: process.env.QQ_GATEWAY_URL?.trim() || "",
   qqIntents: number("QQ_INTENTS", (1 << 25) | (1 << 26) | (1 << 12)),
   llmApiKey: selected.apiKey,

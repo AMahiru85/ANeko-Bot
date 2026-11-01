@@ -82,7 +82,7 @@ read_tty() {
 
 env_description() {
   case "$1" in
-    AI_PROVIDER) printf 'AI 服务商，可选 deepseek、openai、moonshot、qwen、siliconflow 或 other' ;;
+    AI_PROVIDER) printf 'AI 服务商，可选 deepseek、openai、moonshot、qwen 或 other' ;;
     QQ_APP_ID) printf 'QQ 机器人 AppID' ;;
     QQ_APP_SECRET|QQ_CLIENT_SECRET) printf 'QQ 机器人 AppSecret' ;;
     QQ_AUTH_BASE) printf 'QQ Token 服务地址' ;;
@@ -121,17 +121,17 @@ configure_env() {
   [[ -n "${provider_default}" ]] || provider_default="deepseek"
   provider_default="${provider_default,,}"
   if [[ "${preserve_existing}" == 1 && -n "$(env_get AI_PROVIDER)" ]]; then
-    prompt="AI_PROVIDER（deepseek、openai、moonshot、qwen、siliconflow 或 other，回车保留当前值，:cancel 取消）： "
+    prompt="AI_PROVIDER（deepseek、openai、moonshot、qwen 或 other，回车保留当前值，:cancel 取消）： "
   else
-    prompt="AI_PROVIDER（deepseek、openai、moonshot、qwen、siliconflow 或 other，回车使用 ${provider_default}，:cancel 取消）： "
+    prompt="AI_PROVIDER（deepseek、openai、moonshot、qwen 或 other，回车使用 ${provider_default}，:cancel 取消）： "
   fi
   read_tty "${prompt}"
   provider_input="${REPLY,,}"
   case "${provider_input}" in
     :cancel) CONFIG_CANCELLED=1; log "已取消配置。"; return 0 ;;
     "") provider="${provider_default}" ;;
-    deepseek|openai|moonshot|qwen|siliconflow|other) provider="${provider_input}" ;;
-    *) log "AI_PROVIDER 只能是 deepseek、openai、moonshot、qwen、siliconflow 或 other。"; return 0 ;;
+    deepseek|openai|moonshot|qwen|other) provider="${provider_input}" ;;
+    *) log "AI_PROVIDER 只能是 deepseek、openai、moonshot、qwen 或 other。"; return 0 ;;
   esac
 
   if [[ "${provider}" == other ]]; then
@@ -233,7 +233,7 @@ valid_env() {
   [[ -n "${provider}" ]] || provider="deepseek"
   provider="${provider,,}"
   case "${provider}" in
-    deepseek|openai|moonshot|qwen|siliconflow)
+    deepseek|openai|moonshot|qwen)
       local prefix="${provider^^}"
       [[ -n "$(env_get "${prefix}_API_KEY")" ]] || missing+=("${prefix}_API_KEY")
       ;;
@@ -242,7 +242,7 @@ valid_env() {
       [[ -n "$(env_get OTHER_AI_API_KEY)" ]] || missing+=(OTHER_AI_API_KEY)
       [[ -n "$(env_get OTHER_AI_MODEL)" ]] || missing+=(OTHER_AI_MODEL)
       ;;
-    *) missing+=("AI_PROVIDER(deepseek|openai|moonshot|qwen|siliconflow|other)") ;;
+    *) missing+=("AI_PROVIDER(deepseek|openai|moonshot|qwen|other)") ;;
   esac
   if ((${#missing[@]})); then
     log "未填写必填变量：${missing[*]}"

@@ -8,8 +8,8 @@ ANeko-Bot 是一个使用 QQ 官方机器人 Gateway 的 Node.js Agent。它按�
 
 ## 能力
 
-- QQ C2C 私聊、群聊 @ 消息和频道直达消息，包含消息去重、串行处理和 Gateway 心跳/断线重连。
-- OpenAI-compatible 聊天接口，默认适配 DeepSeek、OpenAI、Moonshot、通义千问和 SiliconFlow，也支持 `CUSTOM_PROVIDERS_JSON` 自定义服务商。
+- QQ C2C 私聊、群聊消息、频道消息和频道私信，包含消息去重、串行处理和 Gateway 心跳/断线重连。
+- OpenAI-compatible 聊天接口，默认适配 DeepSeek、OpenAI、Moonshot 和通义千问，也支持 `CUSTOM_PROVIDERS_JSON` 自定义服务商。
 - SSE 流式输出；C2C 使用 QQ stream message 接口逐步更新，群聊/频道按增量分段发送。
 - DeepSeek 模型目录、余额、Files API、图像理解、Tool Calls、网页搜索和网页抓取。
 - `/settings` Markdown 菜单按当前服务商的 capability 显示按钮，可切换服务商、模型和思考等级。
@@ -69,7 +69,9 @@ sudo journalctl -u aneko-bot -f
 
 1. 在 [QQ 开放平台](https://q.qq.com/) 创建机器人并获取 AppID、AppSecret。
 2. 为机器人开启 C2C 私聊以及需要使用的 Gateway intents。
-3. 把凭据写入 `.env`。默认使用 QQ 官方当前地址：Token `https://bots.qq.com`，REST/Gateway `https://api.sgroup.qq.com`。
+3. 把凭据写入 `.env`。默认使用 QQ 官方当前地址 `https://api.bot.qq.com`，Token、REST 和 Gateway 地址均从该官方 API 根地址获取。
+
+接口实现依据 QQ 官方 [访问凭证](https://bot.q.qq.com/wiki/develop/api-v2/dev-prepare/access-token.html)、[API 调用指南](https://bot.q.qq.com/wiki/develop/api-v2/dev-prepare/api-call-guide.html)、[WebSocket Gateway](https://bot.q.qq.com/wiki/develop/api-v2/dev-prepare/event-emit/websocket.html) 和 [C2C 流式消息](https://bot.q.qq.com/wiki/develop/api-v2/autogen/api/v2_users_user_openid_stream_messages.post.html) 文档。
 
 如果使用旧版或代理网关，可通过 `QQ_AUTH_BASE`、`QQ_API_BASE`、`QQ_GATEWAY_URL` 覆盖地址。
 
@@ -101,7 +103,6 @@ DeepSeek：
 | OpenAI | `OPENAI_API_KEY` | `https://api.openai.com/v1` | `gpt-4o-mini` |
 | Moonshot | `MOONSHOT_API_KEY` | `https://api.moonshot.cn/v1` | `moonshot-v1-8k` |
 | 通义千问 | `QWEN_API_KEY` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen-plus` |
-| SiliconFlow | `SILICONFLOW_API_KEY` | `https://api.siliconflow.cn/v1` | `deepseek-ai/DeepSeek-V3` |
 
 每个服务商都支持 `${PREFIX}_BASE_URL`、`${PREFIX}_MODEL`、`${PREFIX}_MODELS` 覆盖默认值。需要接入其他 OpenAI-compatible 服务时，可以填写 `OTHER_AI_BASE_URL`、`OTHER_AI_API_KEY`、`OTHER_AI_MODEL`，或使用 JSON：
 

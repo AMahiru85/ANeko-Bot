@@ -117,7 +117,8 @@ function createSettingButton(id, label, data) {
       style: 0,
     },
     action: {
-      type: 2,
+      // 官方内联键盘回调按钮使用 type=1；type=2 是指令按钮，不会触发 INTERACTION_CREATE。
+      type: 1,
       permission: {
         type: 2,
         specify_user_ids: [],
@@ -268,21 +269,26 @@ function eventTarget(type, data) {
     const id = data?.author?.user_openid || data?.author?.id;
     return id ? { kind: "c2c", id, messageId: data?.id } : null;
   }
-  if (type === "GROUP_AT_MESSAGE_CREATE") {
+  if (type === "GROUP_AT_MESSAGE_CREATE" || type === "GROUP_MESSAGE_CREATE") {
     const id = data?.group_openid || data?.group_id;
     return id ? { kind: "group", id, messageId: data?.id } : null;
   }
-  if (type === "DIRECT_MESSAGE_CREATE") {
+  if (type === "AT_MESSAGE_CREATE" || type === "MESSAGE_CREATE") {
     const id = data?.channel_id;
     return id ? { kind: "channel", id, messageId: data?.id } : null;
+  }
+  if (type === "DIRECT_MESSAGE_CREATE") {
+    const id = data?.guild_id;
+    return id ? { kind: "direct", id, messageId: data?.id } : null;
   }
   return null;
 }
 
-async function sendTargetMessage(target, content) {
+async function sendTargetMessage(target, content, { msgSeq = 1, eventId } = {}) {
   const text = String(content || "");
-  if (target.kind === "c2c") return qqApi.sendC2CMessage(target.id, text, target.messageId);
-  if (target.kind === "group") return qqApi.sendGroupMessage(target.id, text, target.messageId);
+  if (target.kind === "c2c") return qqApi.sendC2CMessage(target.id, text, target.messageId, msgSeq, eventId);
+  if (target.kind === "group") return qqApi.sendGroupMessage(target.id, text, target.messageId, msgSeq, eventId);
+  if (target.kind === "direct") return qqApi.sendDirectMessage(target.id, text, target.messageId);
   return qqApi.sendChannelMessage(target.id, text, target.messageId);
 }
 
@@ -299,7 +305,6 @@ async function handleInteraction(data) {
   markProcessed(interactionId);
 
   const buttonData = data.data?.resolved?.button_data || data.data?.button_data || "";
-  const callbackMessageId = data.message?.id || data.message_id || data.msg_id;
   return enqueue(userId, async () => {
     let prefix = "按钮操作未识别，请重新打开设置菜单。";
     let callbackMessage = prefix;
@@ -380,7 +385,7 @@ async function handleInteraction(data) {
     }
 
     if (callbackMessage) {
-      await qqApi.sendC2CMessage(userId, callbackMessage, callbackMessageId).catch((error) => {
+      await qqApi.sendC2CMessage(userId, callbackMessage, undefined, 1, interactionId).catch((error) => {
         console.error("[C2C] failed to send settings status:", error);
       });
     }
@@ -621,6 +626,7 @@ async function streamReply(target, history, requestOptions = {}) {
     let answer = "";
     let sentLength = 0;
     let lastSentAt = 0;
+    let messageSeq = 1;
     const responseStream = activeCapabilities().tools && activeCapabilities().webSearch
       ? llm.streamWithTools(history, { ...streamSettings, tools: DEEPSEEK_TOOLS, toolHandler: runProviderTool })
       : llm.stream(history, streamSettings);
@@ -628,13 +634,13 @@ async function streamReply(target, history, requestOptions = {}) {
       answer += delta;
       if (answer.length > sentLength && Date.now() - lastSentAt >= STREAM_UPDATE_INTERVAL_MS) {
         const chunk = answer.slice(sentLength, sentLength + STREAM_CONTENT_LIMIT);
-        await sendTargetMessage(target, chunk);
+        await sendTargetMessage(target, chunk, { msgSeq: messageSeq++ });
         sentLength += chunk.length;
         lastSentAt = Date.now();
       }
     }
     for (let offset = sentLength; offset < answer.length; offset += STREAM_CONTENT_LIMIT) {
-      await sendTargetMessage(target, answer.slice(offset, offset + STREAM_CONTENT_LIMIT));
+      await sendTargetMessage(target, answer.slice(offset, offset + STREAM_CONTENT_LIMIT), { msgSeq: messageSeq++ });
     }
     if (!answer.trim()) throw new Error("LLM returned an empty response");
     return answer.trim();
@@ -684,6 +690,7 @@ async function streamReply(target, history, requestOptions = {}) {
 
     if (!answer.trim()) throw new Error("LLM returned an empty response");
     if (streamMsgId) {
+      index += 1;
       await qqApi.sendC2CStreamMessage(userId, answer.slice(0, STREAM_CONTENT_LIMIT), messageId, streamMsgId, 10, index);
     } else if (sentAnswer.length < Math.min(answer.length, STREAM_CONTENT_LIMIT)) {
       index += 1;
@@ -699,6 +706,7 @@ async function streamReply(target, history, requestOptions = {}) {
       error.streamStarted = true;
       if (streamMsgId) {
         const interrupted = `${answer.slice(0, STREAM_CONTENT_LIMIT)}\n\n（生成中断，请稍后重试）`.slice(0, STREAM_CONTENT_LIMIT);
+        index += 1;
         await qqApi.sendC2CStreamMessage(userId, interrupted, messageId, streamMsgId, 10, index)
           .catch((replyError) => console.error("[C2C] failed to finalize stream reply:", replyError));
       }
@@ -711,8 +719,8 @@ async function handleEvent(type, data) {
   if (type === "INTERACTION_CREATE") return handleInteraction(data);
   const target = eventTarget(type, data);
   if (!target) return;
-  const actorId = data?.author?.user_openid || data?.author?.id || target.id;
-  const memoryKey = target.kind === "c2c" ? `${target.kind}:${actorId}` : `${target.kind}:${target.id}`;
+  const actorId = data?.author?.member_openid || data?.author?.user_openid || data?.author?.id || target.id;
+  const memoryKey = `${target.kind}:${target.id}:${actorId}`;
   const queueKey = memoryKey;
   const messageId = target.messageId;
   const text = typeof data?.content === "string"
