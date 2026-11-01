@@ -1,6 +1,6 @@
 # ANeko Bot
 
-> **项目已归档：**此版本已淘汰，项目停止维护，不建议用于新的部署。本文档中的功能与部署说明仅供历史参考。
+> **项目已归档：**此版本已淘汰，项目停止维护，不建议用于新的部署。本文档中的功能与部署说明仅供历史参考。新版本地址为 [AMahiru85/ANeko-Bot](https://github.com/AMahiru85/ANeko-Bot)
 
 基于 Node.js 的 QQ 官方机器人 Agent。
 
@@ -206,6 +206,6 @@ LICENSE              # MIT 许可证
 
 | 项目 | 地址 |
 | --- | --- |
-| 源码仓库 | [AMahiru85/ANeko-Bot](https://github.com/AMahiru85/ANeko-Bot) |
+| 源码仓库 | [AMahiru85/ANeko-Bot-outdated](https://github.com/AMahiru85/ANeko-Bot-outdated) |
 | QQ 官方机器人文档 | [bot.q.qq.com](https://bot.q.qq.com/wiki/develop/api-v2/) |
 | 许可证 | [MIT](LICENSE) |
