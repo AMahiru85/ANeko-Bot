@@ -1,8 +1,6 @@
 # ANeko Bot
 
-基于 Node.js 的 QQ 官方机器人 Agent，通过模型流式输出持续更新回复，并按用户保存当前进程内的对话上下文。
-
-模型能力划分和设置菜单参考 [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)，QQ 接入和 Linux 部署由本项目按官方协议独立实现。运行要求为 Node.js 22.4 或更高版本，无需安装第三方 npm 依赖。
+基于 Node.js 的 QQ 官方机器人 Agent。
 
 ## 项目
 
@@ -31,32 +29,22 @@ AI 服务商
     ↓ 流式文本 / Tool Calls
 QQ 官方消息接口
     ↓
-用户收到持续更新的回复
+用户收到更新回复
 ```
 
 ## QQ 开放平台配置
 
 1. 在 [QQ 开放平台](https://q.qq.com/) 创建机器人。
 2. 获取机器人 `AppID` 和 `AppSecret`。
-3. 开启需要的 C2C、群聊、频道私信或交互事件权限，并在控制台订阅相应 Gateway intents。
-4. 将凭据写入 `.env`。默认 Token、REST 和 Gateway API 根地址为 `https://api.bot.qq.com`。
 
 接口依据 QQ 官方 [访问凭证](https://bot.q.qq.com/wiki/develop/api-v2/dev-prepare/access-token.html)、[API 调用指南](https://bot.q.qq.com/wiki/develop/api-v2/dev-prepare/api-call-guide.html)、[WebSocket Gateway](https://bot.q.qq.com/wiki/develop/api-v2/dev-prepare/event-emit/websocket.html) 和 [消息收发文档](https://bot.q.qq.com/wiki/develop/api-v2/server-inter/message/overview.html) 实现。需要使用代理或自定义网关时，可通过 `QQ_AUTH_BASE`、`QQ_API_BASE` 和 `QQ_GATEWAY_URL` 覆盖地址。
 
 ## 部署
 
-部署脚本适用于 Ubuntu/Debian 和其他使用 systemd 的环境。远程一键安装会拉取仓库、安装 Node.js 22、创建系统用户、配置 systemd，并引导填写 `.env`：
+部署脚本适用于适用于使用了 systemd 的发行版（Ubuntu、Debian...）。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/AMahiru85/ANeko-Bot/main/install.sh | sudo bash
-```
-
-也可以指定仓库和安装目录：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/AMahiru85/ANeko-Bot/main/install.sh \
-  | sudo env REPO_URL=https://github.com/AMahiru85/ANeko-Bot.git \
-      INSTALL_DIR=/opt/aneko-bot bash
 ```
 
 已克隆仓库时，可直接运行完整部署程序：
@@ -75,13 +63,7 @@ sudo bash /opt/aneko-bot/deploy/install.sh --upgrade
 sudo journalctl -u aneko-bot -f
 ```
 
-默认安装目录是 `/opt/aneko-bot`，systemd 服务名和运行用户均为 `aneko-bot`。也可手动运行：
-
-```bash
-cp .env.example .env
-# 填写 QQ 凭据和所选模型服务商的 API Key
-node src/index.mjs
-```
+默认安装目录是 `/opt/aneko-bot`，systemd 服务名和运行用户均为 `aneko-bot`。
 
 ## 命令
 
@@ -200,6 +182,5 @@ LICENSE              # MIT 许可证
 | 项目 | 地址 |
 | --- | --- |
 | ANeko-Bot 源码 | [AMahiru85/ANeko-Bot](https://github.com/AMahiru85/ANeko-Bot) |
-| 能力设计参考 | [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) |
 | QQ 官方机器人文档 | [bot.q.qq.com](https://bot.q.qq.com/wiki/develop/api-v2/) |
 | 许可证 | [MIT](LICENSE) |
